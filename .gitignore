@@ -39,7 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# documentation
 crosschain-transfer
 hello-arc 
 transfer-funds
 unified-gateway-balance
+
+# claude
+.claude
