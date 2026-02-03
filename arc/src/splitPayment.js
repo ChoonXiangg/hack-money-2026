@@ -6,8 +6,8 @@ const client = initiateDeveloperControlledWalletsClient({
   entitySecret: process.env.CIRCLE_ENTITY_SECRET,
 });
 
-// Arc Testnet USDC contract address
-const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+// Arc Testnet USDC token ID (native token on Arc)
+const USDC_TOKEN_ID = "15dc2b5d-0994-58b0-bf8c-3a0501148ee8";
 
 /**
  * Split a payment to multiple recipients based on percentage splits
@@ -29,7 +29,7 @@ export async function splitPayment(fromWalletId, totalAmount, splits) {
 
     const response = await client.createTransaction({
       walletId: fromWalletId,
-      tokenAddress: USDC_ADDRESS,
+      tokenId: USDC_TOKEN_ID,
       destinationAddress: recipientAddress,
       amounts: [shareAmount],
       fee: {
@@ -50,4 +50,4 @@ export async function splitPayment(fromWalletId, totalAmount, splits) {
   return txIds;
 }
 
-export { client, USDC_ADDRESS };
+export { client, USDC_TOKEN_ID };
