@@ -46,12 +46,19 @@ export function listSongs() {
 export function addSong({ title, pricePerSecond, splits }) {
   const songId = `song-${String(Object.keys(songs).length + 1).padStart(3, "0")}`;
 
-  // Convert role-based splits to wallet addresses
+  // Convert splits to wallet addresses
+  // Accepts either role names (e.g., "producer") or raw wallet addresses (e.g., "0x...")
   const addressSplits = {};
-  for (const [role, percentage] of Object.entries(splits)) {
-    const wallet = wallets.wallets[role];
-    if (wallet) {
-      addressSplits[wallet.address] = percentage;
+  for (const [key, percentage] of Object.entries(splits)) {
+    // Check if key is already a wallet address (starts with 0x and is 42 chars)
+    if (key.startsWith("0x") && key.length === 42) {
+      addressSplits[key.toLowerCase()] = percentage;
+    } else {
+      // Otherwise, treat it as a role name and look up the wallet
+      const wallet = wallets.wallets[key];
+      if (wallet) {
+        addressSplits[wallet.address] = percentage;
+      }
     }
   }
 
