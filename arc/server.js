@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 import { payForStream } from "./src/stream.js";
-import { listSongs, getSong } from "./src/songs.js";
+import { listSongs, getSong, addSong } from "./src/songs.js";
 import wallets from "./wallets.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +24,27 @@ const client = initiateDeveloperControlledWalletsClient({
 // Get all songs
 app.get("/api/songs", (req, res) => {
   res.json(listSongs());
+});
+
+// Upload a new song
+app.post("/api/songs", (req, res) => {
+  try {
+    const { title, pricePerSecond, splits } = req.body;
+
+    if (!title || !pricePerSecond || !splits) {
+      return res.status(400).json({ error: "title, pricePerSecond, and splits are required" });
+    }
+
+    const totalSplit = Object.values(splits).reduce((sum, pct) => sum + pct, 0);
+    if (totalSplit !== 100) {
+      return res.status(400).json({ error: "Splits must total 100%" });
+    }
+
+    const song = addSong({ title, pricePerSecond, splits });
+    res.status(201).json(song);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get wallet balances

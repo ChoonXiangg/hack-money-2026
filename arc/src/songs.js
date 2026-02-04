@@ -3,7 +3,7 @@ import wallets from "../wallets.json" with { type: "json" };
 /**
  * Song registry with metadata and royalty split configuration
  */
-export const songs = {
+const songs = {
   "song-001": {
     songId: "song-001",
     title: "Midnight Dreams",
@@ -41,4 +41,27 @@ export function getSong(songId) {
 
 export function listSongs() {
   return Object.values(songs);
+}
+
+export function addSong({ title, pricePerSecond, splits }) {
+  const songId = `song-${String(Object.keys(songs).length + 1).padStart(3, "0")}`;
+
+  // Convert role-based splits to wallet addresses
+  const addressSplits = {};
+  for (const [role, percentage] of Object.entries(splits)) {
+    const wallet = wallets.wallets[role];
+    if (wallet) {
+      addressSplits[wallet.address] = percentage;
+    }
+  }
+
+  const song = {
+    songId,
+    title,
+    pricePerSecond: String(pricePerSecond),
+    splits: addressSplits,
+  };
+
+  songs[songId] = song;
+  return song;
 }

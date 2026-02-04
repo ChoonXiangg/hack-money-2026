@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Song - Arc Music</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    header p {
+      color: #888;
+      font-size: 1.1rem;
+    }
+    .nav-link {
+      display: inline-block;
+      color: #00d4ff;
+      text-decoration: none;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    .nav-link:hover {
+      text-decoration: underline;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      color: #00d4ff;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #ccc;
+      font-weight: 500;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+    .form-group .hint {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    .splits-section {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .splits-section h3 {
+      font-size: 1rem;
+      margin-bottom: 16px;
+      color: #888;
+    }
+    .split-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .split-row label {
+      flex: 0 0 100px;
+      color: #ccc;
+    }
+    .split-row input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .split-row span {
+      color: #888;
+    }
+    .split-total {
+      text-align: right;
+      padding: 12px;
+      background: rgba(0, 212, 255, 0.1);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .split-total.valid {
+      color: #00ff88;
+    }
+    .split-total.invalid {
+      color: #ff6b6b;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover {
+      opacity: 0.9;
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .success-message {
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid #00ff88;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      display: none;
+    }
+    .success-message h3 {
+      color: #00ff88;
+      margin-bottom: 8px;
+    }
+    .success-message p {
+      color: #ccc;
+      font-size: 0.9rem;
+    }
+    .error-message {
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid #ff6b6b;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      display: none;
+      color: #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="nav-link">&larr; Back to Streaming</a>
+
+    <header>
+      <h1>Upload Your Song</h1>
+      <p>Add a new track and configure instant royalty splits</p>
+    </header>
+
+    <div class="card">
+      <h2>Song Details</h2>
+
+      <form id="uploadForm">
+        <div class="form-group">
+          <label for="title">Song Title</label>
+          <input type="text" id="title" name="title" placeholder="Enter song title" required>
+        </div>
+
+        <div class="form-group">
+          <label for="pricePerSecond">Price per Second (USDC)</label>
+          <input type="number" id="pricePerSecond" name="pricePerSecond"
+                 step="0.00001" min="0.00001" max="1"
+                 placeholder="0.0001" required>
+          <div class="hint">Typical range: 0.00005 - 0.0002 USDC/second</div>
+        </div>
+
+        <div class="splits-section">
+          <h3>Royalty Splits</h3>
+
+          <div class="split-row">
+            <label>Artist</label>
+            <input type="number" id="artistSplit" value="50" min="0" max="100">
+            <span>%</span>
+          </div>
+
+          <div class="split-row">
+            <label>Producer</label>
+            <input type="number" id="producerSplit" value="30" min="0" max="100">
+            <span>%</span>
+          </div>
+
+          <div class="split-row">
+            <label>Platform</label>
+            <input type="number" id="platformSplit" value="20" min="0" max="100">
+            <span>%</span>
+          </div>
+
+          <div class="split-total" id="splitTotal">
+            Total: <strong>100%</strong>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">Upload Song</button>
+      </form>
+
+      <div class="success-message" id="successMessage">
+        <h3>Song Uploaded Successfully!</h3>
+        <p id="successDetails"></p>
+      </div>
+
+      <div class="error-message" id="errorMessage"></div>
+    </div>
+  </div>
+
+  <script>
+    const artistSplit = document.getElementById('artistSplit');
+    const producerSplit = document.getElementById('producerSplit');
+    const platformSplit = document.getElementById('platformSplit');
+    const splitTotal = document.getElementById('splitTotal');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function updateSplitTotal() {
+      const total = (parseInt(artistSplit.value) || 0) +
+                    (parseInt(producerSplit.value) || 0) +
+                    (parseInt(platformSplit.value) || 0);
+
+      splitTotal.innerHTML = `Total: <strong>${total}%</strong>`;
+
+      if (total === 100) {
+        splitTotal.className = 'split-total valid';
+        submitBtn.disabled = false;
+      } else {
+        splitTotal.className = 'split-total invalid';
+        submitBtn.disabled = true;
+      }
+    }
+
+    artistSplit.addEventListener('input', updateSplitTotal);
+    producerSplit.addEventListener('input', updateSplitTotal);
+    platformSplit.addEventListener('input', updateSplitTotal);
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const successEl = document.getElementById('successMessage');
+      const errorEl = document.getElementById('errorMessage');
+      successEl.style.display = 'none';
+      errorEl.style.display = 'none';
+
+      const title = document.getElementById('title').value.trim();
+      const pricePerSecond = document.getElementById('pricePerSecond').value;
+
+      const splits = {
+        artist: parseInt(artistSplit.value) || 0,
+        producer: parseInt(producerSplit.value) || 0,
+        platform: parseInt(platformSplit.value) || 0
+      };
+
+      // Remove zero splits
+      Object.keys(splits).forEach(key => {
+        if (splits[key] === 0) delete splits[key];
+      });
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading...';
+
+      try {
+        const res = await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, pricePerSecond, splits })
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          throw new Error(result.error || 'Failed to upload song');
+        }
+
+        document.getElementById('successDetails').textContent =
+          `"${result.title}" has been added with ID: ${result.songId}. ` +
+          `Price: ${result.pricePerSecond} USDC/sec`;
+        successEl.style.display = 'block';
+
+        // Reset form
+        document.getElementById('uploadForm').reset();
+        artistSplit.value = 50;
+        producerSplit.value = 30;
+        platformSplit.value = 20;
+        updateSplitTotal();
+
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Upload Song';
+      updateSplitTotal();
+    });
+
+    // Initial validation
+    updateSplitTotal();
+  </script>
+</body>
+</html>
