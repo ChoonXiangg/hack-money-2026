@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arc Music Streaming</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    header p {
+      color: #888;
+      font-size: 1.1rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      color: #00d4ff;
+    }
+    .song-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .song-item {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .song-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .song-item.selected {
+      border-color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .song-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .song-meta {
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .splits {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .split-badge {
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 20px;
+      background: rgba(123, 44, 191, 0.3);
+    }
+    .duration-control {
+      margin-top: 20px;
+    }
+    .duration-control label {
+      display: block;
+      margin-bottom: 8px;
+      color: #888;
+    }
+    .duration-input {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .duration-input input {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .duration-input span {
+      color: #888;
+    }
+    .stream-btn {
+      width: 100%;
+      padding: 16px;
+      margin-top: 20px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .stream-btn:hover {
+      opacity: 0.9;
+    }
+    .stream-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .wallet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .wallet-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+    }
+    .wallet-role {
+      font-weight: 500;
+      text-transform: capitalize;
+    }
+    .wallet-balance {
+      font-family: monospace;
+      color: #00d4ff;
+    }
+    .wallet-address {
+      font-size: 0.75rem;
+      color: #666;
+      font-family: monospace;
+    }
+    .tx-log {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .tx-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-left: 3px solid #00d4ff;
+    }
+    .tx-item .title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .tx-item .details {
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .tx-item .amount {
+      color: #00d4ff;
+      font-family: monospace;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+    }
+    .cost-preview {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(0, 212, 255, 0.1);
+      border-radius: 8px;
+      text-align: center;
+    }
+    .cost-preview .label {
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .cost-preview .value {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #00d4ff;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Arc Music Streaming</h1>
+      <p>Instant royalty splits on Arc Testnet</p>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Select a Song</h2>
+        <div class="song-list" id="songList">
+          <div class="loading">Loading songs...</div>
+        </div>
+
+        <div class="duration-control">
+          <label>Stream Duration</label>
+          <div class="duration-input">
+            <input type="number" id="duration" value="60" min="1" max="3600">
+            <span>seconds</span>
+          </div>
+        </div>
+
+        <div class="cost-preview" id="costPreview" style="display: none;">
+          <div class="label">Total Cost</div>
+          <div class="value" id="costValue">0.000000 USDC</div>
+        </div>
+
+        <button class="stream-btn" id="streamBtn" disabled>Select a Song to Stream</button>
+      </div>
+
+      <div class="card">
+        <h2>Wallet Balances</h2>
+        <div class="wallet-list" id="walletList">
+          <div class="loading">Loading balances...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Transaction Log</h2>
+      <div class="tx-log" id="txLog">
+        <div class="loading">No transactions yet</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let songs = [];
+    let selectedSong = null;
+
+    async function loadSongs() {
+      const res = await fetch('/api/songs');
+      songs = await res.json();
+      renderSongs();
+    }
+
+    async function loadBalances() {
+      const res = await fetch('/api/balances');
+      const balances = await res.json();
+      renderBalances(balances);
+    }
+
+    function renderSongs() {
+      const container = document.getElementById('songList');
+      container.innerHTML = songs.map(song => `
+        <div class="song-item" data-id="${song.songId}" onclick="selectSong('${song.songId}')">
+          <div class="song-title">${song.title}</div>
+          <div class="song-meta">${song.pricePerSecond} USDC/sec</div>
+          <div class="splits">
+            ${Object.entries(song.splits).map(([addr, pct]) =>
+              `<span class="split-badge">${pct}%</span>`
+            ).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderBalances(balances) {
+      const container = document.getElementById('walletList');
+      container.innerHTML = Object.entries(balances).map(([role, data]) => `
+        <div class="wallet-item">
+          <div>
+            <div class="wallet-role">${role}</div>
+            <div class="wallet-address">${data.address.slice(0, 10)}...${data.address.slice(-8)}</div>
+          </div>
+          <div class="wallet-balance">${parseFloat(data.balance).toFixed(6)} USDC</div>
+        </div>
+      `).join('');
+    }
+
+    function selectSong(songId) {
+      selectedSong = songs.find(s => s.songId === songId);
+      document.querySelectorAll('.song-item').forEach(el => {
+        el.classList.toggle('selected', el.dataset.id === songId);
+      });
+      updateCostPreview();
+      document.getElementById('streamBtn').disabled = false;
+      document.getElementById('streamBtn').textContent = `Stream "${selectedSong.title}"`;
+    }
+
+    function updateCostPreview() {
+      if (!selectedSong) return;
+      const duration = parseInt(document.getElementById('duration').value) || 0;
+      const cost = (parseFloat(selectedSong.pricePerSecond) * duration).toFixed(6);
+      document.getElementById('costPreview').style.display = 'block';
+      document.getElementById('costValue').textContent = `${cost} USDC`;
+    }
+
+    document.getElementById('duration').addEventListener('input', updateCostPreview);
+
+    async function streamSong() {
+      if (!selectedSong) return;
+
+      const btn = document.getElementById('streamBtn');
+      const duration = parseInt(document.getElementById('duration').value);
+
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+
+      try {
+        const res = await fetch('/api/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ songId: selectedSong.songId, seconds: duration })
+        });
+        const result = await res.json();
+
+        if (result.error) {
+          alert('Error: ' + result.error);
+        } else {
+          addTransaction(result);
+          loadBalances();
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = `Stream "${selectedSong.title}"`;
+    }
+
+    function addTransaction(result) {
+      const container = document.getElementById('txLog');
+      if (container.querySelector('.loading')) {
+        container.innerHTML = '';
+      }
+
+      const txHtml = `
+        <div class="tx-item">
+          <div class="title">${result.title} - ${result.seconds}s</div>
+          <div class="details">
+            Total: <span class="amount">${result.totalAmount} USDC</span>
+          </div>
+          <div class="details" style="margin-top: 8px;">
+            ${result.transactions.map(tx =>
+              `${tx.percentage}% → <span class="amount">${tx.amount}</span> USDC`
+            ).join(' | ')}
+          </div>
+        </div>
+      `;
+      container.insertAdjacentHTML('afterbegin', txHtml);
+    }
+
+    document.getElementById('streamBtn').addEventListener('click', streamSong);
+
+    // Initial load
+    loadSongs();
+    loadBalances();
+
+    // Refresh balances every 10 seconds
+    setInterval(loadBalances, 10000);
+  </script>
+</body>
+</html>
