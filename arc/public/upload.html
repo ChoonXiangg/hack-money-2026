@@ -18,7 +18,7 @@
       padding: 20px;
     }
     .container {
-      max-width: 600px;
+      max-width: 700px;
       margin: 0 auto;
     }
     header {
@@ -159,40 +159,125 @@
       padding: 16px;
       margin-bottom: 20px;
     }
-    .splits-section h3 {
-      font-size: 1rem;
+    .splits-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 16px;
+    }
+    .splits-header h3 {
+      font-size: 1rem;
       color: #888;
     }
-    .split-row {
+    .add-recipient-btn {
+      padding: 8px 16px;
+      border: 1px solid #00d4ff;
+      border-radius: 8px;
+      background: transparent;
+      color: #00d4ff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .add-recipient-btn:hover {
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .recipient-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .recipient-card.is-you {
+      border-color: rgba(246, 133, 27, 0.5);
+      background: rgba(246, 133, 27, 0.05);
+    }
+    .recipient-header {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 12px;
       margin-bottom: 12px;
     }
-    .split-row label {
-      flex: 0 0 100px;
-      color: #ccc;
+    .recipient-number {
+      font-size: 0.85rem;
+      color: #888;
     }
-    .split-row input {
-      flex: 1;
+    .you-badge {
+      font-size: 0.7rem;
+      background: rgba(246, 133, 27, 0.3);
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #f6851b;
+      margin-left: 8px;
+    }
+    .remove-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(255, 107, 107, 0.2);
+      color: #ff6b6b;
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      transition: all 0.2s;
+    }
+    .remove-btn:hover {
+      background: rgba(255, 107, 107, 0.4);
+    }
+    .remove-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .recipient-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .recipient-fields .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .recipient-fields .field.full-width {
+      grid-column: 1 / -1;
+    }
+    .recipient-fields label {
+      font-size: 0.8rem;
+      color: #888;
+    }
+    .recipient-fields input {
       padding: 10px;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       background: rgba(255, 255, 255, 0.05);
       color: #fff;
-      font-size: 1rem;
+      font-size: 0.9rem;
     }
-    .split-row span {
+    .recipient-fields input:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+    .recipient-fields input::placeholder {
+      color: #555;
+    }
+    .recipient-fields input.address-input {
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+    .percentage-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .percentage-field input {
+      width: 80px;
+      text-align: center;
+    }
+    .percentage-field span {
       color: #888;
-    }
-    .split-row .wallet-tag {
-      font-size: 0.7rem;
-      background: rgba(246, 133, 27, 0.3);
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: #f6851b;
-      margin-left: 4px;
     }
     .split-total {
       text-align: right;
@@ -263,6 +348,11 @@
     .no-metamask a {
       color: #f6851b;
     }
+    @media (max-width: 600px) {
+      .recipient-fields {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -318,28 +408,15 @@
         </div>
 
         <div class="splits-section">
-          <h3>Royalty Splits</h3>
-
-          <div class="split-row">
-            <label>Artist <span class="wallet-tag">Your Wallet</span></label>
-            <input type="number" id="artistSplit" value="50" min="0" max="100">
-            <span>%</span>
+          <div class="splits-header">
+            <h3>Royalty Recipients</h3>
+            <button type="button" class="add-recipient-btn" id="addRecipientBtn">+ Add Recipient</button>
           </div>
 
-          <div class="split-row">
-            <label>Producer</label>
-            <input type="number" id="producerSplit" value="30" min="0" max="100">
-            <span>%</span>
-          </div>
-
-          <div class="split-row">
-            <label>Platform</label>
-            <input type="number" id="platformSplit" value="20" min="0" max="100">
-            <span>%</span>
-          </div>
+          <div id="recipientsList"></div>
 
           <div class="split-total" id="splitTotal">
-            Total: <strong>100%</strong>
+            Total: <strong>0%</strong>
           </div>
         </div>
 
@@ -357,6 +434,8 @@
 
   <script>
     let connectedAddress = null;
+    let recipients = [];
+    let recipientIdCounter = 0;
 
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
@@ -366,10 +445,8 @@
     const uploadForm = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
     const noMetamask = document.getElementById('noMetamask');
-
-    const artistSplit = document.getElementById('artistSplit');
-    const producerSplit = document.getElementById('producerSplit');
-    const platformSplit = document.getElementById('platformSplit');
+    const recipientsList = document.getElementById('recipientsList');
+    const addRecipientBtn = document.getElementById('addRecipientBtn');
     const splitTotal = document.getElementById('splitTotal');
 
     // Check if MetaMask is installed
@@ -390,13 +467,11 @@
         connectBtn.disabled = true;
         connectBtn.textContent = 'Connecting...';
 
-        // Use wallet_requestPermissions to force the account selection popup
         await window.ethereum.request({
           method: 'wallet_requestPermissions',
           params: [{ eth_accounts: {} }]
         });
 
-        // After permission granted, get the selected account
         const accounts = await window.ethereum.request({
           method: 'eth_accounts'
         });
@@ -430,6 +505,25 @@
 
       // Enable form
       uploadForm.classList.remove('form-disabled');
+
+      // Add initial recipient (the artist/connected wallet)
+      if (recipients.length === 0) {
+        addRecipient({
+          name: '',
+          role: 'Artist',
+          address: address,
+          percentage: 100,
+          isYou: true
+        });
+      } else {
+        // Update the first recipient's address if it was marked as "isYou"
+        const youRecipient = recipients.find(r => r.isYou);
+        if (youRecipient) {
+          youRecipient.address = address;
+          renderRecipients();
+        }
+      }
+
       updateSplitTotal();
     }
 
@@ -443,17 +537,97 @@
       uploadForm.classList.add('form-disabled');
       submitBtn.disabled = true;
       submitBtn.textContent = 'Connect Wallet to Upload';
+
+      // Reset recipients
+      recipients = [];
+      recipientIdCounter = 0;
+      renderRecipients();
+    }
+
+    // Add a recipient
+    function addRecipient(data = {}) {
+      const recipient = {
+        id: recipientIdCounter++,
+        name: data.name || '',
+        role: data.role || '',
+        address: data.address || '',
+        percentage: data.percentage || 0,
+        isYou: data.isYou || false
+      };
+      recipients.push(recipient);
+      renderRecipients();
+      updateSplitTotal();
+    }
+
+    // Remove a recipient
+    function removeRecipient(id) {
+      recipients = recipients.filter(r => r.id !== id);
+      renderRecipients();
+      updateSplitTotal();
+    }
+
+    // Update recipient data
+    function updateRecipient(id, field, value) {
+      const recipient = recipients.find(r => r.id === id);
+      if (recipient) {
+        if (field === 'percentage') {
+          recipient[field] = parseInt(value) || 0;
+        } else {
+          recipient[field] = value;
+        }
+        updateSplitTotal();
+      }
+    }
+
+    // Render all recipients
+    function renderRecipients() {
+      recipientsList.innerHTML = recipients.map((r, index) => `
+        <div class="recipient-card ${r.isYou ? 'is-you' : ''}" data-id="${r.id}">
+          <div class="recipient-header">
+            <span class="recipient-number">
+              Recipient ${index + 1}
+              ${r.isYou ? '<span class="you-badge">Your Wallet</span>' : ''}
+            </span>
+            <button type="button" class="remove-btn" onclick="removeRecipient(${r.id})" ${recipients.length === 1 ? 'disabled' : ''}>×</button>
+          </div>
+          <div class="recipient-fields">
+            <div class="field">
+              <label>Name</label>
+              <input type="text" placeholder="e.g., John Doe" value="${r.name}"
+                     onchange="updateRecipient(${r.id}, 'name', this.value)">
+            </div>
+            <div class="field">
+              <label>Role</label>
+              <input type="text" placeholder="e.g., Artist, Producer" value="${r.role}"
+                     onchange="updateRecipient(${r.id}, 'role', this.value)">
+            </div>
+            <div class="field full-width">
+              <label>Wallet Address</label>
+              <input type="text" class="address-input" placeholder="0x..." value="${r.address}"
+                     onchange="updateRecipient(${r.id}, 'address', this.value)"
+                     ${r.isYou ? 'readonly' : ''}>
+            </div>
+            <div class="field">
+              <label>Percentage</label>
+              <div class="percentage-field">
+                <input type="number" min="0" max="100" value="${r.percentage}"
+                       oninput="updateRecipient(${r.id}, 'percentage', this.value)">
+                <span>%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
     }
 
     // Update split total and button state
     function updateSplitTotal() {
-      const total = (parseInt(artistSplit.value) || 0) +
-                    (parseInt(producerSplit.value) || 0) +
-                    (parseInt(platformSplit.value) || 0);
+      const total = recipients.reduce((sum, r) => sum + (r.percentage || 0), 0);
 
       splitTotal.innerHTML = `Total: <strong>${total}%</strong>`;
 
-      const isValid = total === 100 && connectedAddress;
+      const allValid = recipients.every(r => r.address && r.address.startsWith('0x') && r.address.length === 42);
+      const isValid = total === 100 && connectedAddress && recipients.length > 0 && allValid;
 
       if (total === 100) {
         splitTotal.className = 'split-total valid';
@@ -463,7 +637,13 @@
 
       if (connectedAddress) {
         submitBtn.disabled = !isValid;
-        submitBtn.textContent = isValid ? 'Upload Song' : 'Splits must equal 100%';
+        if (!allValid && recipients.length > 0) {
+          submitBtn.textContent = 'All recipients need valid wallet addresses';
+        } else if (total !== 100) {
+          submitBtn.textContent = 'Splits must equal 100%';
+        } else {
+          submitBtn.textContent = 'Upload Song';
+        }
       }
     }
 
@@ -484,23 +664,12 @@
       const title = document.getElementById('title').value.trim();
       const pricePerSecond = document.getElementById('pricePerSecond').value;
 
-      // Build splits with artist's connected wallet address
+      // Build splits object from recipients
       const splits = {};
-
-      const artistPct = parseInt(artistSplit.value) || 0;
-      const producerPct = parseInt(producerSplit.value) || 0;
-      const platformPct = parseInt(platformSplit.value) || 0;
-
-      // Use the connected wallet address for artist split
-      if (artistPct > 0) {
-        splits[connectedAddress] = artistPct;
-      }
-      // Use role names for producer and platform (backend will resolve addresses)
-      if (producerPct > 0) {
-        splits['producer'] = producerPct;
-      }
-      if (platformPct > 0) {
-        splits['platform'] = platformPct;
+      for (const r of recipients) {
+        if (r.percentage > 0 && r.address) {
+          splits[r.address.toLowerCase()] = r.percentage;
+        }
       }
 
       submitBtn.disabled = true;
@@ -519,17 +688,23 @@
           throw new Error(result.error || 'Failed to upload song');
         }
 
+        const recipientCount = recipients.length;
         document.getElementById('successDetails').textContent =
           `"${result.title}" has been added with ID: ${result.songId}. ` +
-          `Royalties will be sent to ${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`;
+          `Royalties will be split among ${recipientCount} recipient${recipientCount > 1 ? 's' : ''}.`;
         successEl.style.display = 'block';
 
         // Reset form
         document.getElementById('uploadForm').reset();
-        artistSplit.value = 50;
-        producerSplit.value = 30;
-        platformSplit.value = 20;
-        updateSplitTotal();
+        recipients = [];
+        recipientIdCounter = 0;
+        addRecipient({
+          name: '',
+          role: 'Artist',
+          address: connectedAddress,
+          percentage: 100,
+          isYou: true
+        });
 
       } catch (err) {
         errorEl.textContent = err.message;
@@ -544,9 +719,7 @@
     // Event listeners
     connectBtn.addEventListener('click', connectWallet);
     disconnectBtn.addEventListener('click', disconnectWallet);
-    artistSplit.addEventListener('input', updateSplitTotal);
-    producerSplit.addEventListener('input', updateSplitTotal);
-    platformSplit.addEventListener('input', updateSplitTotal);
+    addRecipientBtn.addEventListener('click', () => addRecipient());
     document.getElementById('uploadForm').addEventListener('submit', handleSubmit);
 
     // Listen for account changes (only after user has connected)
@@ -555,7 +728,6 @@
         if (accounts.length === 0) {
           disconnectWallet();
         } else if (connectedAddress) {
-          // Only update if user has explicitly connected
           setConnectedState(accounts[0]);
         }
       });
