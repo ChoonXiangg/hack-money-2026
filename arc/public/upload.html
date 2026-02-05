@@ -433,6 +433,20 @@
   </div>
 
   <script>
+    // Supported chains for recipient payments (testnet)
+    const SUPPORTED_CHAINS = [
+      { id: "Arc_Testnet", name: "Arc", isDefault: true },
+      { id: "Ethereum_Sepolia", name: "Ethereum" },
+      { id: "Arbitrum_Sepolia", name: "Arbitrum" },
+      { id: "Avalanche_Fuji", name: "Avalanche" },
+      { id: "Base_Sepolia", name: "Base" },
+      { id: "Optimism_Sepolia", name: "Optimism" },
+      { id: "Polygon_Amoy", name: "Polygon" },
+      { id: "Unichain_Sepolia", name: "Unichain" },
+      { id: "Solana_Devnet", name: "Solana" },
+    ];
+    const DEFAULT_CHAIN = SUPPORTED_CHAINS.find(c => c.isDefault).id;
+
     let connectedAddress = null;
     let recipients = [];
     let recipientIdCounter = 0;
@@ -552,6 +566,7 @@
         role: data.role || '',
         address: data.address || '',
         percentage: data.percentage || 0,
+        chain: data.chain || DEFAULT_CHAIN,
         isYou: data.isYou || false
       };
       recipients.push(recipient);
@@ -572,6 +587,9 @@
       if (recipient) {
         if (field === 'percentage') {
           recipient[field] = parseInt(value) || 0;
+        } else if (field === 'chain') {
+          recipient[field] = value;
+          renderRecipients(); // Re-render to update dropdown selection
         } else {
           recipient[field] = value;
         }
