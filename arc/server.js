@@ -35,7 +35,11 @@ app.post("/api/songs", (req, res) => {
       return res.status(400).json({ error: "title, pricePerSecond, and splits are required" });
     }
 
-    const totalSplit = Object.values(splits).reduce((sum, pct) => sum + pct, 0);
+    // Splits now contain { percentage, chain } per recipient
+    const totalSplit = Object.values(splits).reduce(
+      (sum, split) => sum + (split.percentage || split), // Support both new and legacy format
+      0
+    );
     if (totalSplit !== 100) {
       return res.status(400).json({ error: "Splits must total 100%" });
     }
@@ -67,7 +71,8 @@ app.get("/api/balances", async (req, res) => {
   }
 });
 
-// Stream a song
+// Stream a song - pays all recipients on their preferred blockchain
+// Response includes: payments array (direct + bridged) and summary
 app.post("/api/stream", async (req, res) => {
   try {
     const { songId, seconds } = req.body;

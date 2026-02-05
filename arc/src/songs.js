@@ -1,7 +1,11 @@
 import wallets from "../wallets.json" with { type: "json" };
+import { getDefaultChain } from "./chains.js";
+
+const DEFAULT_CHAIN = getDefaultChain().id;
 
 /**
  * Song registry with metadata and royalty split configuration
+ * Splits now include chain preference per recipient: { percentage, chain }
  */
 const songs = {
   "song-001": {
@@ -9,9 +13,9 @@ const songs = {
     title: "Midnight Dreams",
     pricePerSecond: "0.0001", // USDC per second
     splits: {
-      [wallets.wallets.artist.address]: 50,   // Artist: 50%
-      [wallets.wallets.producer.address]: 30, // Producer: 30%
-      [wallets.wallets.platform.address]: 20, // Platform: 20%
+      [wallets.wallets.artist.address]: { percentage: 50, chain: DEFAULT_CHAIN },
+      [wallets.wallets.producer.address]: { percentage: 30, chain: DEFAULT_CHAIN },
+      [wallets.wallets.platform.address]: { percentage: 20, chain: DEFAULT_CHAIN },
     },
   },
   "song-002": {
@@ -19,9 +23,9 @@ const songs = {
     title: "Electric Sunrise",
     pricePerSecond: "0.00015", // USDC per second (higher rate)
     splits: {
-      [wallets.wallets.artist.address]: 60,   // Artist: 60%
-      [wallets.wallets.producer.address]: 25, // Producer: 25%
-      [wallets.wallets.platform.address]: 15, // Platform: 15%
+      [wallets.wallets.artist.address]: { percentage: 60, chain: DEFAULT_CHAIN },
+      [wallets.wallets.producer.address]: { percentage: 25, chain: DEFAULT_CHAIN },
+      [wallets.wallets.platform.address]: { percentage: 15, chain: DEFAULT_CHAIN },
     },
   },
   "song-003": {
@@ -29,8 +33,8 @@ const songs = {
     title: "Ocean Waves",
     pricePerSecond: "0.00008", // USDC per second (lower rate)
     splits: {
-      [wallets.wallets.artist.address]: 70,   // Artist: 70% (indie artist, higher cut)
-      [wallets.wallets.platform.address]: 30, // Platform: 30% (no producer)
+      [wallets.wallets.artist.address]: { percentage: 70, chain: DEFAULT_CHAIN },
+      [wallets.wallets.platform.address]: { percentage: 30, chain: DEFAULT_CHAIN },
     },
   },
 };
@@ -48,16 +52,23 @@ export function addSong({ title, pricePerSecond, splits }) {
 
   // Convert splits to wallet addresses
   // Accepts either role names (e.g., "producer") or raw wallet addresses (e.g., "0x...")
+  // Split values can be: number (legacy) or { percentage, chain } (new format)
   const addressSplits = {};
-  for (const [key, percentage] of Object.entries(splits)) {
+  for (const [key, value] of Object.entries(splits)) {
+    // Normalize value to { percentage, chain } format
+    const splitData =
+      typeof value === "number"
+        ? { percentage: value, chain: DEFAULT_CHAIN }
+        : { percentage: value.percentage, chain: value.chain || DEFAULT_CHAIN };
+
     // Check if key is already a wallet address (starts with 0x and is 42 chars)
     if (key.startsWith("0x") && key.length === 42) {
-      addressSplits[key.toLowerCase()] = percentage;
+      addressSplits[key.toLowerCase()] = splitData;
     } else {
       // Otherwise, treat it as a role name and look up the wallet
       const wallet = wallets.wallets[key];
       if (wallet) {
-        addressSplits[wallet.address] = percentage;
+        addressSplits[wallet.address] = splitData;
       }
     }
   }

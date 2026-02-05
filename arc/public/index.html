@@ -297,8 +297,8 @@
           <div class="song-title">${song.title}</div>
           <div class="song-meta">${song.pricePerSecond} USDC/sec</div>
           <div class="splits">
-            ${Object.entries(song.splits).map(([addr, pct]) =>
-              `<span class="split-badge">${pct}%</span>`
+            ${Object.entries(song.splits).map(([addr, data]) =>
+              `<span class="split-badge">${typeof data === 'number' ? data : data.percentage}%</span>`
             ).join('')}
           </div>
         </div>
@@ -382,8 +382,8 @@
             Total: <span class="amount">${result.totalAmount} USDC</span>
           </div>
           <div class="details" style="margin-top: 8px;">
-            ${result.transactions.map(tx =>
-              `${tx.percentage}% → <span class="amount">${tx.amount}</span> USDC`
+            ${result.payments.map(tx =>
+              `${tx.percentage}% → <span class="amount">${tx.amount}</span> USDC${tx.bridged ? ' (bridged)' : ''}`
             ).join(' | ')}
           </div>
         </div>

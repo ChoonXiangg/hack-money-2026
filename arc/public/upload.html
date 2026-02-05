@@ -58,74 +58,6 @@
       margin-bottom: 20px;
       color: #00d4ff;
     }
-    .wallet-section {
-      text-align: center;
-    }
-    .connect-btn {
-      padding: 14px 28px;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(90deg, #f6851b, #e2761b);
-      color: #fff;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .connect-btn:hover {
-      opacity: 0.9;
-    }
-    .connect-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .wallet-connected {
-      display: none;
-      text-align: center;
-    }
-    .wallet-connected.show {
-      display: block;
-    }
-    .wallet-address {
-      font-family: monospace;
-      background: rgba(0, 212, 255, 0.1);
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      word-break: break-all;
-      margin-bottom: 12px;
-    }
-    .wallet-status {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: #00ff88;
-      font-size: 0.9rem;
-    }
-    .wallet-status .dot {
-      width: 8px;
-      height: 8px;
-      background: #00ff88;
-      border-radius: 50%;
-    }
-    .disconnect-btn {
-      margin-top: 12px;
-      padding: 8px 16px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      background: transparent;
-      color: #888;
-      font-size: 0.85rem;
-      cursor: pointer;
-    }
-    .disconnect-btn:hover {
-      border-color: #ff6b6b;
-      color: #ff6b6b;
-    }
     .form-group {
       margin-bottom: 20px;
     }
@@ -190,10 +122,6 @@
       margin-bottom: 12px;
       position: relative;
     }
-    .recipient-card.is-you {
-      border-color: rgba(246, 133, 27, 0.5);
-      background: rgba(246, 133, 27, 0.05);
-    }
     .recipient-header {
       display: flex;
       justify-content: space-between;
@@ -203,14 +131,6 @@
     .recipient-number {
       font-size: 0.85rem;
       color: #888;
-    }
-    .you-badge {
-      font-size: 0.7rem;
-      background: rgba(246, 133, 27, 0.3);
-      padding: 3px 8px;
-      border-radius: 4px;
-      color: #f6851b;
-      margin-left: 8px;
     }
     .remove-btn {
       width: 28px;
@@ -359,18 +279,6 @@
       display: none;
       color: #ff6b6b;
     }
-    .form-disabled {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-    .no-metamask {
-      color: #ff6b6b;
-      font-size: 0.9rem;
-      margin-top: 12px;
-    }
-    .no-metamask a {
-      color: #f6851b;
-    }
     @media (max-width: 600px) {
       .recipient-fields {
         grid-template-columns: 1fr;
@@ -387,36 +295,11 @@
       <p>Add a new track and configure instant royalty splits</p>
     </header>
 
-    <!-- Wallet Connection Card -->
-    <div class="card">
-      <h2>1. Connect Your Wallet</h2>
-      <div class="wallet-section" id="walletSection">
-        <button class="connect-btn" id="connectBtn">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M21.5 12C21.5 17.2467 17.2467 21.5 12 21.5C6.75329 21.5 2.5 17.2467 2.5 12C2.5 6.75329 6.75329 2.5 12 2.5C17.2467 2.5 21.5 6.75329 21.5 12Z" fill="#F6851B"/>
-            <path d="M15.5 9.5L12 6L8.5 9.5M12 6V15" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Connect MetaMask
-        </button>
-        <div class="no-metamask" id="noMetamask" style="display: none;">
-          MetaMask not detected. <a href="https://metamask.io/download/" target="_blank">Install MetaMask</a>
-        </div>
-      </div>
-      <div class="wallet-connected" id="walletConnected">
-        <div class="wallet-status">
-          <span class="dot"></span>
-          Connected
-        </div>
-        <div class="wallet-address" id="walletAddress"></div>
-        <button class="disconnect-btn" id="disconnectBtn">Disconnect</button>
-      </div>
-    </div>
-
     <!-- Song Details Card -->
     <div class="card">
-      <h2>2. Song Details</h2>
+      <h2>Song Details</h2>
 
-      <form id="uploadForm" class="form-disabled">
+      <form id="uploadForm">
         <div class="form-group">
           <label for="title">Song Title</label>
           <input type="text" id="title" name="title" placeholder="Enter song title" required>
@@ -443,7 +326,7 @@
           </div>
         </div>
 
-        <button type="submit" class="submit-btn" id="submitBtn" disabled>Connect Wallet to Upload</button>
+        <button type="submit" class="submit-btn" id="submitBtn" disabled>Splits must equal 100%</button>
       </form>
 
       <div class="success-message" id="successMessage">
@@ -470,116 +353,14 @@
     ];
     const DEFAULT_CHAIN = SUPPORTED_CHAINS.find(c => c.isDefault).id;
 
-    let connectedAddress = null;
     let recipients = [];
     let recipientIdCounter = 0;
 
-    const connectBtn = document.getElementById('connectBtn');
-    const disconnectBtn = document.getElementById('disconnectBtn');
-    const walletSection = document.getElementById('walletSection');
-    const walletConnected = document.getElementById('walletConnected');
-    const walletAddressEl = document.getElementById('walletAddress');
     const uploadForm = document.getElementById('uploadForm');
     const submitBtn = document.getElementById('submitBtn');
-    const noMetamask = document.getElementById('noMetamask');
     const recipientsList = document.getElementById('recipientsList');
     const addRecipientBtn = document.getElementById('addRecipientBtn');
     const splitTotal = document.getElementById('splitTotal');
-
-    // Check if MetaMask is installed
-    function checkMetaMask() {
-      if (typeof window.ethereum === 'undefined') {
-        connectBtn.style.display = 'none';
-        noMetamask.style.display = 'block';
-        return false;
-      }
-      return true;
-    }
-
-    // Connect wallet - forces MetaMask popup for account selection
-    async function connectWallet() {
-      if (!checkMetaMask()) return;
-
-      try {
-        connectBtn.disabled = true;
-        connectBtn.textContent = 'Connecting...';
-
-        await window.ethereum.request({
-          method: 'wallet_requestPermissions',
-          params: [{ eth_accounts: {} }]
-        });
-
-        const accounts = await window.ethereum.request({
-          method: 'eth_accounts'
-        });
-
-        if (accounts.length > 0) {
-          setConnectedState(accounts[0]);
-        }
-      } catch (error) {
-        console.error('Connection error:', error);
-        if (error.code === 4001) {
-          alert('Connection rejected. Please approve the connection in MetaMask.');
-        }
-      } finally {
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = `
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M21.5 12C21.5 17.2467 17.2467 21.5 12 21.5C6.75329 21.5 2.5 17.2467 2.5 12C2.5 6.75329 6.75329 2.5 12 2.5C17.2467 2.5 21.5 6.75329 21.5 12Z" fill="#F6851B"/>
-            <path d="M15.5 9.5L12 6L8.5 9.5M12 6V15" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Connect MetaMask
-        `;
-      }
-    }
-
-    // Set connected state
-    function setConnectedState(address) {
-      connectedAddress = address;
-      walletSection.style.display = 'none';
-      walletConnected.classList.add('show');
-      walletAddressEl.textContent = address;
-
-      // Enable form
-      uploadForm.classList.remove('form-disabled');
-
-      // Add initial recipient (the artist/connected wallet)
-      if (recipients.length === 0) {
-        addRecipient({
-          name: '',
-          role: 'Artist',
-          address: address,
-          percentage: 100,
-          isYou: true
-        });
-      } else {
-        // Update the first recipient's address if it was marked as "isYou"
-        const youRecipient = recipients.find(r => r.isYou);
-        if (youRecipient) {
-          youRecipient.address = address;
-          renderRecipients();
-        }
-      }
-
-      updateSplitTotal();
-    }
-
-    // Disconnect wallet
-    function disconnectWallet() {
-      connectedAddress = null;
-      walletSection.style.display = 'block';
-      walletConnected.classList.remove('show');
-
-      // Disable form
-      uploadForm.classList.add('form-disabled');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Connect Wallet to Upload';
-
-      // Reset recipients
-      recipients = [];
-      recipientIdCounter = 0;
-      renderRecipients();
-    }
 
     // Add a recipient
     function addRecipient(data = {}) {
@@ -589,8 +370,7 @@
         role: data.role || '',
         address: data.address || '',
         percentage: data.percentage || 0,
-        chain: data.chain || DEFAULT_CHAIN,
-        isYou: data.isYou || false
+        chain: data.chain || DEFAULT_CHAIN
       };
       recipients.push(recipient);
       renderRecipients();
@@ -612,7 +392,7 @@
           recipient[field] = parseInt(value) || 0;
         } else if (field === 'chain') {
           recipient[field] = value;
-          renderRecipients(); // Re-render to update dropdown selection
+          renderRecipients();
         } else {
           recipient[field] = value;
         }
@@ -623,12 +403,9 @@
     // Render all recipients
     function renderRecipients() {
       recipientsList.innerHTML = recipients.map((r, index) => `
-        <div class="recipient-card ${r.isYou ? 'is-you' : ''}" data-id="${r.id}">
+        <div class="recipient-card" data-id="${r.id}">
           <div class="recipient-header">
-            <span class="recipient-number">
-              Recipient ${index + 1}
-              ${r.isYou ? '<span class="you-badge">Your Wallet</span>' : ''}
-            </span>
+            <span class="recipient-number">Recipient ${index + 1}</span>
             <button type="button" class="remove-btn" onclick="removeRecipient(${r.id})" ${recipients.length === 1 ? 'disabled' : ''}>×</button>
           </div>
           <div class="recipient-fields">
@@ -645,8 +422,7 @@
             <div class="field full-width">
               <label>Wallet Address</label>
               <input type="text" class="address-input" placeholder="0x..." value="${r.address}"
-                     onchange="updateRecipient(${r.id}, 'address', this.value)"
-                     ${r.isYou ? 'readonly' : ''}>
+                     onchange="updateRecipient(${r.id}, 'address', this.value)">
             </div>
             <div class="field">
               <label>Percentage</label>
@@ -676,7 +452,7 @@
       splitTotal.innerHTML = `Total: <strong>${total}%</strong>`;
 
       const allValid = recipients.every(r => r.address && r.address.startsWith('0x') && r.address.length === 42);
-      const isValid = total === 100 && connectedAddress && recipients.length > 0 && allValid;
+      const isValid = total === 100 && recipients.length > 0 && allValid;
 
       if (total === 100) {
         splitTotal.className = 'split-total valid';
@@ -684,26 +460,19 @@
         splitTotal.className = 'split-total invalid';
       }
 
-      if (connectedAddress) {
-        submitBtn.disabled = !isValid;
-        if (!allValid && recipients.length > 0) {
-          submitBtn.textContent = 'All recipients need valid wallet addresses';
-        } else if (total !== 100) {
-          submitBtn.textContent = 'Splits must equal 100%';
-        } else {
-          submitBtn.textContent = 'Upload Song';
-        }
+      submitBtn.disabled = !isValid;
+      if (!allValid && recipients.length > 0) {
+        submitBtn.textContent = 'All recipients need valid wallet addresses';
+      } else if (total !== 100) {
+        submitBtn.textContent = 'Splits must equal 100%';
+      } else {
+        submitBtn.textContent = 'Upload Song';
       }
     }
 
     // Handle form submission
     async function handleSubmit(e) {
       e.preventDefault();
-
-      if (!connectedAddress) {
-        alert('Please connect your wallet first');
-        return;
-      }
 
       const successEl = document.getElementById('successMessage');
       const errorEl = document.getElementById('errorMessage');
@@ -713,11 +482,14 @@
       const title = document.getElementById('title').value.trim();
       const pricePerSecond = document.getElementById('pricePerSecond').value;
 
-      // Build splits object from recipients
+      // Build splits object from recipients (includes chain per recipient)
       const splits = {};
       for (const r of recipients) {
         if (r.percentage > 0 && r.address) {
-          splits[r.address.toLowerCase()] = r.percentage;
+          splits[r.address.toLowerCase()] = {
+            percentage: r.percentage,
+            chain: r.chain
+          };
         }
       }
 
@@ -747,13 +519,7 @@
         document.getElementById('uploadForm').reset();
         recipients = [];
         recipientIdCounter = 0;
-        addRecipient({
-          name: '',
-          role: 'Artist',
-          address: connectedAddress,
-          percentage: 100,
-          isYou: true
-        });
+        addRecipient({ role: 'Artist', percentage: 100 });
 
       } catch (err) {
         errorEl.textContent = err.message;
@@ -766,25 +532,11 @@
     }
 
     // Event listeners
-    connectBtn.addEventListener('click', connectWallet);
-    disconnectBtn.addEventListener('click', disconnectWallet);
     addRecipientBtn.addEventListener('click', () => addRecipient());
     document.getElementById('uploadForm').addEventListener('submit', handleSubmit);
 
-    // Listen for account changes (only after user has connected)
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts) => {
-        if (accounts.length === 0) {
-          disconnectWallet();
-        } else if (connectedAddress) {
-          setConnectedState(accounts[0]);
-        }
-      });
-    }
-
-    // Initial setup
-    checkMetaMask();
-    updateSplitTotal();
+    // Initial setup - add first recipient
+    addRecipient({ role: 'Artist', percentage: 100 });
   </script>
 </body>
 </html>

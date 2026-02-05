@@ -27,6 +27,12 @@
       "address": "0x843b9ec5c49092bbf874acbacb397d2c252e36a4",
       "blockchain": "ETH-SEPOLIA",
       "role": "Relayer for CCTP minting on Ethereum Sepolia"
+    },
+    "artistEthSepolia": {
+      "id": "9f83e6c1-f590-535e-854d-770b818fd5c8",
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "blockchain": "ETH-SEPOLIA",
+      "role": "Artist wallet on Ethereum Sepolia for cross-chain payments"
     }
   }
 }
