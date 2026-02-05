@@ -1,0 +1,38 @@
+{
+  "walletSetId": "a06e8054-bd94-5e58-ab64-1149b6fd482a",
+  "walletSetName": "MusicStreamRoyalties",
+  "wallets": {
+    "listener": {
+      "id": "57043c9c-b520-59c8-b315-9a46c581bf35",
+      "address": "0x843b9ec5c49092bbf874acbacb397d2c252e36a4",
+      "role": "Pays for streaming"
+    },
+    "artist": {
+      "id": "c92e30e6-d7e4-5f8d-b22c-3060dd56a3e1",
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "role": "Receives 50%"
+    },
+    "producer": {
+      "id": "aac5f0ea-60ad-5303-912a-8cc93f327a94",
+      "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+      "role": "Receives 30%"
+    },
+    "platform": {
+      "id": "c339974e-21ac-5d0d-b1e2-fc2a3158be96",
+      "address": "0x96244711f04a3899cf5c3b1e727409e1856d6874",
+      "role": "Receives 20%"
+    },
+    "ethSepoliaRelayer": {
+      "id": "33579eb6-64ca-5ca9-8e37-76845501cce7",
+      "address": "0x843b9ec5c49092bbf874acbacb397d2c252e36a4",
+      "blockchain": "ETH-SEPOLIA",
+      "role": "Relayer for CCTP minting on Ethereum Sepolia"
+    },
+    "artistEthSepolia": {
+      "id": "9f83e6c1-f590-535e-854d-770b818fd5c8",
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "blockchain": "ETH-SEPOLIA",
+      "role": "Artist wallet on Ethereum Sepolia for cross-chain payments"
+    }
+  }
+}
