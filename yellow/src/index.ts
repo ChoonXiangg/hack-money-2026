@@ -116,6 +116,7 @@ async function fetchConfig(): Promise<Config> {
 console.log('Fetching configuration...');
 const config = await fetchConfig();
 console.log('Configuration fetched. Assets count:', config.assets?.length);
+console.log('Supported assets:', JSON.stringify(config.assets, null, 2));
 
 const client = new NitroliteClient({
     publicClient,
