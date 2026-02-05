@@ -633,6 +633,14 @@
                 <span>%</span>
               </div>
             </div>
+            <div class="field">
+              <label>Payout Chain</label>
+              <select class="chain-select" onchange="updateRecipient(${r.id}, 'chain', this.value)">
+                ${SUPPORTED_CHAINS.map(c => `
+                  <option value="${c.id}" ${r.chain === c.id ? 'selected' : ''}>${c.name}</option>
+                `).join('')}
+              </select>
+            </div>
           </div>
         </div>
       `).join('');
