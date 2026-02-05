@@ -1,0 +1,12 @@
+{
+  "name": "superfan-ui",
+  "version": "1.0.0",
+  "description": "Test UI for Superfan Sui contract",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.0.0"
+  }
+}
