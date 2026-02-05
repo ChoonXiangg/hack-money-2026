@@ -41,7 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # documentation
-# crosschain-transfer
+crosschain-transfer
 hello-arc 
 transfer-funds
 unified-gateway-balance
