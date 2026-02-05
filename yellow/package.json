@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "create-wallet": "tsx scripts/create-wallet.ts",
     "close-all": "tsx scripts/close-all.ts",
-    "test:service": "tsx scripts/test-service.ts"
+    "test:service": "tsx scripts/test-service.ts",
+    "relayer:withdraw": "tsx scripts/relayer-withdraw.ts"
   },
   "keywords": [],
   "author": "",

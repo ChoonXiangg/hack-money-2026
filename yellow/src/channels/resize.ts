@@ -105,11 +105,11 @@ export async function submitResizeToBlockchain(
     } as unknown as Parameters<typeof client.resizeChannel>[0]['resizeState'];
 
     // Try to get proof states from on-chain data
-    let proofStates: unknown[] = [];
+    let proofStates: Parameters<typeof client.resizeChannel>[0]['proofStates'] = [];
     try {
         const onChainData = await client.getChannelData(channel_id);
         if (onChainData.lastValidState) {
-            proofStates = [onChainData.lastValidState];
+            proofStates = [onChainData.lastValidState] as typeof proofStates;
         }
     } catch (e) {
         // No proof states available, continue without them
