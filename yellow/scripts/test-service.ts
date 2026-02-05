@@ -130,8 +130,9 @@ async function main() {
 
         // Step 5: End session and transfer to relayer
         console.log('\n[Step 5] Ending session...');
-        console.log('  - Closing Yellow channel');
-        console.log('  - Transferring spent amount to relayer (on-chain)');
+        console.log('  - Transferring spent amount to relayer (off-chain Yellow ledger)');
+        console.log('  - Closing Yellow channel and withdrawing remaining funds');
+        console.log('  - Relayer can then withdraw to get on-chain ERC20 tokens');
 
         const settlement = await service.endSession();
 

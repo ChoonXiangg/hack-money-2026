@@ -1,4 +1,5 @@
 import type { Address, Hash, PublicClient, WalletClient } from 'viem';
+import { sepolia } from 'viem/chains';
 import { RELAYER_ADDRESS, formatUSDCDisplay, TIMING } from '../config';
 
 // ============================================================================
@@ -149,6 +150,8 @@ export async function transferToRelayer(
             abi: ERC20_TRANSFER_ABI,
             functionName: 'transfer',
             args: [relayerAddress, amount],
+            chain: sepolia,
+            account,
         });
 
         console.log(`  Transaction submitted: ${hash}`);

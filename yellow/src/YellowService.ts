@@ -23,6 +23,9 @@ import {
     SEPOLIA_CHAIN_ID,
 } from './config';
 
+import { sepolia } from 'viem/chains';
+import { privateKeyToAccount } from 'viem/accounts';
+
 import {
     generateSessionKeyPair,
     createAuthParams,
@@ -48,8 +51,6 @@ import {
 
 import { fundChannel } from './channels/resize';
 import { closeChannelAndWithdraw } from './channels/close';
-import { transferAndConfirm } from './channels/transfer';
-import { transferToRelayer } from './channels/relayer';
 import { formatUSDCDisplay, RELAYER_ADDRESS } from './config';
 
 import { SessionManager } from './session/SessionManager';
@@ -296,10 +297,9 @@ export class YellowService extends EventEmitter {
      * End the current session and settle payments
      *
      * Flow:
-     * 1. Transfer spent amount to relayer (off-chain via Yellow ledger)
-     * 2. Close Yellow channel
-     * 3. Withdraw remaining funds from custody to user's wallet
-     * 4. Relayer handles cross-chain distribution to artists via Circle CCTP
+     * 1. Close Yellow channel and withdraw ALL funds to user's wallet
+     * 2. Transfer spent amount to relayer via direct on-chain ERC20 transfer
+     * 3. Relayer now has actual ERC20 tokens they can swap/exchange
      */
     async endSession(): Promise<SettlementResult> {
         if (!this.sessionManager.isActive()) {
@@ -333,48 +333,8 @@ export class YellowService extends EventEmitter {
             console.log(`    - ${address}: ${formatUSDCDisplay(amount)}`);
         }
 
-        // Step 1: Transfer spent amount to relayer (off-chain via Yellow)
-        let relayerTransferResult: TransferResult | null = null;
-
-        if (totalSpent > 0n) {
-            console.log('\n[Step 1] Transferring spent amount to relayer (off-chain)...');
-            console.log(`  Relayer: ${RELAYER_ADDRESS}`);
-            console.log(`  Amount: ${formatUSDCDisplay(totalSpent)}`);
-
-            try {
-                const transferResult = await transferAndConfirm({
-                    ws: this.ws,
-                    sessionKeyPair: this.sessionKeyPair,
-                    destination: RELAYER_ADDRESS,
-                    asset: 'ytest.usd',
-                    amount: totalSpent.toString(),
-                });
-
-                relayerTransferResult = {
-                    success: transferResult.success,
-                    destination: RELAYER_ADDRESS,
-                    amount: totalSpent,
-                    timestamp: Date.now(),
-                };
-
-                console.log(`✓ Transferred ${formatUSDCDisplay(totalSpent)} to relayer`);
-            } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`✗ Relayer transfer failed: ${errorMsg}`);
-
-                relayerTransferResult = {
-                    success: false,
-                    destination: RELAYER_ADDRESS,
-                    amount: totalSpent,
-                    timestamp: Date.now(),
-                };
-            }
-        } else {
-            console.log('\n[Step 1] No spent amount to transfer to relayer');
-        }
-
-        // Step 2: Close channel
-        console.log('\n[Step 2] Closing channel...');
+        // Step 1: Close channel and withdraw ALL funds to user
+        console.log('\n[Step 1] Closing channel and withdrawing all funds...');
         const closeResult = await closeChannelAndWithdraw({
             ws: this.ws,
             client: this.clients.nitroliteClient,
@@ -387,37 +347,79 @@ export class YellowService extends EventEmitter {
         });
         console.log(`✓ Channel closed: ${closeResult.closeTxHash}`);
 
-        // Step 3: Withdrawal happens automatically in closeChannelAndWithdraw
         if (closeResult.withdrawTxHash) {
-            console.log(`✓ Funds withdrawn: ${closeResult.withdrawTxHash}`);
+            console.log(`✓ All funds withdrawn to user wallet: ${closeResult.withdrawTxHash}`);
         }
 
-        // Step 4: If off-chain transfer failed, try on-chain transfer as fallback
-        if (totalSpent > 0n && !relayerTransferResult?.success) {
-            console.log('\n[Step 3] Off-chain transfer failed, trying on-chain transfer...');
+        // Step 2: Transfer spent amount to relayer via on-chain ERC20 transfer
+        let relayerTransferResult: TransferResult | null = null;
 
-            // Wait for withdrawal to settle
-            await new Promise((r) => setTimeout(r, TIMING.closeSettleDelay));
+        if (totalSpent > 0n) {
+            console.log('\n[Step 2] Transferring spent amount to relayer (on-chain ERC20)...');
+            console.log(`  Relayer: ${RELAYER_ADDRESS}`);
+            console.log(`  Amount: ${formatUSDCDisplay(totalSpent)}`);
 
-            const onChainResult = await transferToRelayer({
-                walletClient: this.clients.walletClient,
-                publicClient: this.clients.publicClient,
-                tokenAddress: this.token,
-                amount: totalSpent,
-            });
+            try {
+                // ERC20 transfer ABI
+                const erc20TransferAbi = [{
+                    type: 'function',
+                    name: 'transfer',
+                    inputs: [
+                        { name: 'to', type: 'address' },
+                        { name: 'amount', type: 'uint256' }
+                    ],
+                    outputs: [{ type: 'bool' }],
+                    stateMutability: 'nonpayable'
+                }] as const;
 
-            relayerTransferResult = {
-                success: onChainResult.success,
-                destination: RELAYER_ADDRESS,
-                amount: totalSpent,
-                timestamp: Date.now(),
-            };
+                // Create proper account for the transaction
+                const account = privateKeyToAccount(this.config.privateKey);
 
-            if (onChainResult.success) {
-                console.log(`✓ On-chain transfer successful: ${onChainResult.txHash}`);
-            } else {
-                console.error(`✗ On-chain transfer also failed: ${onChainResult.error}`);
+                // Send ERC20 transfer transaction
+                const txHash = await this.clients.walletClient.writeContract({
+                    address: this.token,
+                    abi: erc20TransferAbi,
+                    functionName: 'transfer',
+                    args: [RELAYER_ADDRESS, totalSpent],
+                    chain: sepolia,
+                    account,
+                });
+
+                console.log(`  TX submitted: ${txHash}`);
+
+                // Wait for confirmation
+                const receipt = await this.clients.publicClient.waitForTransactionReceipt({
+                    hash: txHash,
+                    timeout: 60_000,
+                });
+
+                if (receipt.status === 'success') {
+                    relayerTransferResult = {
+                        success: true,
+                        destination: RELAYER_ADDRESS,
+                        amount: totalSpent,
+                        timestamp: Date.now(),
+                    };
+
+                    console.log(`✓ On-chain ERC20 transfer to relayer successful!`);
+                    console.log(`  TX: https://sepolia.etherscan.io/tx/${txHash}`);
+                    console.log(`  Relayer now has actual ERC20 ytest.usd tokens`);
+                } else {
+                    throw new Error('Transfer transaction reverted');
+                }
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                console.error(`✗ On-chain transfer failed: ${errorMsg}`);
+
+                relayerTransferResult = {
+                    success: false,
+                    destination: RELAYER_ADDRESS,
+                    amount: totalSpent,
+                    timestamp: Date.now(),
+                };
             }
+        } else {
+            console.log('\n[Step 2] No spent amount to transfer to relayer');
         }
 
         // Build transfer results (for reporting artist distributions)
@@ -431,6 +433,9 @@ export class YellowService extends EventEmitter {
             });
         }
 
+        // Calculate user's refund (total withdrawn minus what went to relayer)
+        const userRefund = closeResult.withdrawAmount - totalSpent;
+
         // Generate session summary
         const summary = this.sessionManager.endSession();
         this.emit('session:ended', summary);
@@ -442,7 +447,7 @@ export class YellowService extends EventEmitter {
             success: true,
             transfers,
             closeTxHash: closeResult.closeTxHash,
-            refundAmount: closeResult.withdrawAmount,
+            refundAmount: userRefund,
             withdrawTxHash: closeResult.withdrawTxHash,
             relayerTransfer: relayerTransferResult,
         };
@@ -587,14 +592,15 @@ export class YellowService extends EventEmitter {
     private async waitForChannels(): Promise<Channel[]> {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                this.messageHandlers.delete('channels');
+                this.messageHandlers.delete('get_ledger_balances');
                 reject(new Error('Channels request timeout'));
             }, TIMING.wsMessageTimeout);
 
-            this.messageHandlers.set('channels', (data: unknown) => {
+            // The ledger balances response includes channels
+            this.messageHandlers.set('get_ledger_balances', (data: unknown) => {
                 clearTimeout(timeout);
-                this.messageHandlers.delete('channels');
-                const response = data as { channels: Channel[] };
+                this.messageHandlers.delete('get_ledger_balances');
+                const response = data as { channels?: Channel[] };
                 resolve(response.channels || []);
             });
         });

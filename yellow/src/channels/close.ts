@@ -74,10 +74,11 @@ export function waitForCloseConfirmation(
 }
 
 /**
- * Submit close to blockchain
+ * Submit close to blockchain and verify success
  */
 export async function submitCloseToBlockchain(
     client: NitroliteClient,
+    publicClient: PublicClient,
     response: CloseChannelResponse
 ): Promise<Hash> {
     const { channel_id, state, server_signature } = response;
@@ -97,6 +98,16 @@ export async function submitCloseToBlockchain(
         } as unknown as Parameters<typeof client.closeChannel>[0]['finalState'],
         stateData: state.state_data || state.data || '0x',
     });
+
+    // Wait for transaction and verify it succeeded
+    const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash as Hash,
+        timeout: 60_000, // 60 second timeout
+    });
+
+    if (receipt.status === 'reverted') {
+        throw new Error(`Channel close transaction FAILED (out of gas). TX: ${txHash}. Please check your ETH balance for gas.`);
+    }
 
     return txHash as Hash;
 }
@@ -192,8 +203,8 @@ export async function closeChannelAndWithdraw(
     // Wait for ClearNode confirmation
     const closeResponse = await waitForCloseConfirmation(ws, channelId);
 
-    // Submit close to blockchain
-    const closeTxHash = await submitCloseToBlockchain(client, closeResponse);
+    // Submit close to blockchain and verify it succeeded
+    const closeTxHash = await submitCloseToBlockchain(client, publicClient, closeResponse);
 
     // Withdraw remaining funds
     const { amount: withdrawAmount, txHash: withdrawTxHash } = await withdrawFromCustody({
