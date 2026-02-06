@@ -1,0 +1,32 @@
+{
+  "name": "yellow",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "tsx scripts/test-service.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "create-wallet": "tsx scripts/create-wallet.ts",
+    "close-all": "tsx scripts/close-all.ts",
+    "test:service": "tsx scripts/test-service.ts",
+    "relayer:withdraw": "tsx scripts/relayer-withdraw.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@erc7824/nitrolite": "^0.5.3",
+    "dotenv": "^16.4.7",
+    "viem": "^2.45.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "@types/ws": "^8.5.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

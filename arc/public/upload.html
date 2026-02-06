@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Song - Arc Music</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    header p {
+      color: #888;
+      font-size: 1.1rem;
+    }
+    .nav-link {
+      display: inline-block;
+      color: #00d4ff;
+      text-decoration: none;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    .nav-link:hover {
+      text-decoration: underline;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      color: #00d4ff;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #ccc;
+      font-weight: 500;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 1rem;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+    .form-group .hint {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 4px;
+    }
+    .splits-section {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .splits-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .splits-header h3 {
+      font-size: 1rem;
+      color: #888;
+    }
+    .add-recipient-btn {
+      padding: 8px 16px;
+      border: 1px solid #00d4ff;
+      border-radius: 8px;
+      background: transparent;
+      color: #00d4ff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .add-recipient-btn:hover {
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .recipient-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .recipient-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .recipient-number {
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .remove-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(255, 107, 107, 0.2);
+      color: #ff6b6b;
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      transition: all 0.2s;
+    }
+    .remove-btn:hover {
+      background: rgba(255, 107, 107, 0.4);
+    }
+    .remove-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .recipient-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .recipient-fields .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .recipient-fields .field.full-width {
+      grid-column: 1 / -1;
+    }
+    .recipient-fields label {
+      font-size: 0.8rem;
+      color: #888;
+    }
+    .recipient-fields input {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 0.9rem;
+    }
+    .recipient-fields input:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+    .recipient-fields input::placeholder {
+      color: #555;
+    }
+    .recipient-fields input.address-input {
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+    .percentage-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .percentage-field input {
+      width: 80px;
+      text-align: center;
+    }
+    .percentage-field span {
+      color: #888;
+    }
+    .chain-select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .chain-select:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+    .chain-select option {
+      background: #1a1a2e;
+      color: #fff;
+    }
+    .split-total {
+      text-align: right;
+      padding: 12px;
+      background: rgba(0, 212, 255, 0.1);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .split-total.valid {
+      color: #00ff88;
+    }
+    .split-total.invalid {
+      color: #ff6b6b;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover {
+      opacity: 0.9;
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .success-message {
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid #00ff88;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      display: none;
+    }
+    .success-message h3 {
+      color: #00ff88;
+      margin-bottom: 8px;
+    }
+    .success-message p {
+      color: #ccc;
+      font-size: 0.9rem;
+    }
+    .error-message {
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid #ff6b6b;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      display: none;
+      color: #ff6b6b;
+    }
+    @media (max-width: 600px) {
+      .recipient-fields {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="nav-link">&larr; Back to Streaming</a>
+
+    <header>
+      <h1>Upload Your Song</h1>
+      <p>Add a new track and configure instant royalty splits</p>
+    </header>
+
+    <!-- Song Details Card -->
+    <div class="card">
+      <h2>Song Details</h2>
+
+      <form id="uploadForm">
+        <div class="form-group">
+          <label for="title">Song Title</label>
+          <input type="text" id="title" name="title" placeholder="Enter song title" required>
+        </div>
+
+        <div class="form-group">
+          <label for="pricePerSecond">Price per Second (USDC)</label>
+          <input type="number" id="pricePerSecond" name="pricePerSecond"
+                 step="0.00001" min="0.00001" max="1"
+                 placeholder="0.0001" required>
+          <div class="hint">Typical range: 0.00005 - 0.0002 USDC/second</div>
+        </div>
+
+        <div class="splits-section">
+          <div class="splits-header">
+            <h3>Royalty Recipients</h3>
+            <button type="button" class="add-recipient-btn" id="addRecipientBtn">+ Add Recipient</button>
+          </div>
+
+          <div id="recipientsList"></div>
+
+          <div class="split-total" id="splitTotal">
+            Total: <strong>0%</strong>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn" disabled>Splits must equal 100%</button>
+      </form>
+
+      <div class="success-message" id="successMessage">
+        <h3>Song Uploaded Successfully!</h3>
+        <p id="successDetails"></p>
+      </div>
+
+      <div class="error-message" id="errorMessage"></div>
+    </div>
+  </div>
+
+  <script>
+    // Supported chains for recipient payments (testnet)
+    const SUPPORTED_CHAINS = [
+      { id: "Arc_Testnet", name: "Arc", isDefault: true },
+      { id: "Ethereum_Sepolia", name: "Ethereum" },
+      { id: "Arbitrum_Sepolia", name: "Arbitrum" },
+      { id: "Avalanche_Fuji", name: "Avalanche" },
+      { id: "Base_Sepolia", name: "Base" },
+      { id: "Optimism_Sepolia", name: "Optimism" },
+      { id: "Polygon_Amoy", name: "Polygon" },
+      { id: "Unichain_Sepolia", name: "Unichain" },
+      { id: "Solana_Devnet", name: "Solana" },
+    ];
+    const DEFAULT_CHAIN = SUPPORTED_CHAINS.find(c => c.isDefault).id;
+
+    let recipients = [];
+    let recipientIdCounter = 0;
+
+    const uploadForm = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const recipientsList = document.getElementById('recipientsList');
+    const addRecipientBtn = document.getElementById('addRecipientBtn');
+    const splitTotal = document.getElementById('splitTotal');
+
+    // Add a recipient
+    function addRecipient(data = {}) {
+      const recipient = {
+        id: recipientIdCounter++,
+        name: data.name || '',
+        role: data.role || '',
+        address: data.address || '',
+        percentage: data.percentage || 0,
+        chain: data.chain || DEFAULT_CHAIN
+      };
+      recipients.push(recipient);
+      renderRecipients();
+      updateSplitTotal();
+    }
+
+    // Remove a recipient
+    function removeRecipient(id) {
+      recipients = recipients.filter(r => r.id !== id);
+      renderRecipients();
+      updateSplitTotal();
+    }
+
+    // Update recipient data
+    function updateRecipient(id, field, value) {
+      const recipient = recipients.find(r => r.id === id);
+      if (recipient) {
+        if (field === 'percentage') {
+          recipient[field] = parseInt(value) || 0;
+        } else if (field === 'chain') {
+          recipient[field] = value;
+          renderRecipients();
+        } else {
+          recipient[field] = value;
+        }
+        updateSplitTotal();
+      }
+    }
+
+    // Render all recipients
+    function renderRecipients() {
+      recipientsList.innerHTML = recipients.map((r, index) => `
+        <div class="recipient-card" data-id="${r.id}">
+          <div class="recipient-header">
+            <span class="recipient-number">Recipient ${index + 1}</span>
+            <button type="button" class="remove-btn" onclick="removeRecipient(${r.id})" ${recipients.length === 1 ? 'disabled' : ''}>×</button>
+          </div>
+          <div class="recipient-fields">
+            <div class="field">
+              <label>Name</label>
+              <input type="text" placeholder="e.g., John Doe" value="${r.name}"
+                     onchange="updateRecipient(${r.id}, 'name', this.value)">
+            </div>
+            <div class="field">
+              <label>Role</label>
+              <input type="text" placeholder="e.g., Artist, Producer" value="${r.role}"
+                     onchange="updateRecipient(${r.id}, 'role', this.value)">
+            </div>
+            <div class="field full-width">
+              <label>Wallet Address</label>
+              <input type="text" class="address-input" placeholder="0x..." value="${r.address}"
+                     onchange="updateRecipient(${r.id}, 'address', this.value)">
+            </div>
+            <div class="field">
+              <label>Percentage</label>
+              <div class="percentage-field">
+                <input type="number" min="0" max="100" value="${r.percentage}"
+                       oninput="updateRecipient(${r.id}, 'percentage', this.value)">
+                <span>%</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Payout Chain</label>
+              <select class="chain-select" onchange="updateRecipient(${r.id}, 'chain', this.value)">
+                ${SUPPORTED_CHAINS.map(c => `
+                  <option value="${c.id}" ${r.chain === c.id ? 'selected' : ''}>${c.name}</option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Update split total and button state
+    function updateSplitTotal() {
+      const total = recipients.reduce((sum, r) => sum + (r.percentage || 0), 0);
+
+      splitTotal.innerHTML = `Total: <strong>${total}%</strong>`;
+
+      const allValid = recipients.every(r => r.address && r.address.startsWith('0x') && r.address.length === 42);
+      const isValid = total === 100 && recipients.length > 0 && allValid;
+
+      if (total === 100) {
+        splitTotal.className = 'split-total valid';
+      } else {
+        splitTotal.className = 'split-total invalid';
+      }
+
+      submitBtn.disabled = !isValid;
+      if (!allValid && recipients.length > 0) {
+        submitBtn.textContent = 'All recipients need valid wallet addresses';
+      } else if (total !== 100) {
+        submitBtn.textContent = 'Splits must equal 100%';
+      } else {
+        submitBtn.textContent = 'Upload Song';
+      }
+    }
+
+    // Handle form submission
+    async function handleSubmit(e) {
+      e.preventDefault();
+
+      const successEl = document.getElementById('successMessage');
+      const errorEl = document.getElementById('errorMessage');
+      successEl.style.display = 'none';
+      errorEl.style.display = 'none';
+
+      const title = document.getElementById('title').value.trim();
+      const pricePerSecond = document.getElementById('pricePerSecond').value;
+
+      // Build splits object from recipients (includes chain per recipient)
+      const splits = {};
+      for (const r of recipients) {
+        if (r.percentage > 0 && r.address) {
+          splits[r.address.toLowerCase()] = {
+            percentage: r.percentage,
+            chain: r.chain
+          };
+        }
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading...';
+
+      try {
+        const res = await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, pricePerSecond, splits })
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          throw new Error(result.error || 'Failed to upload song');
+        }
+
+        const recipientCount = recipients.length;
+        document.getElementById('successDetails').textContent =
+          `"${result.title}" has been added with ID: ${result.songId}. ` +
+          `Royalties will be split among ${recipientCount} recipient${recipientCount > 1 ? 's' : ''}.`;
+        successEl.style.display = 'block';
+
+        // Reset form
+        document.getElementById('uploadForm').reset();
+        recipients = [];
+        recipientIdCounter = 0;
+        addRecipient({ role: 'Artist', percentage: 100 });
+
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Upload Song';
+      updateSplitTotal();
+    }
+
+    // Event listeners
+    addRecipientBtn.addEventListener('click', () => addRecipient());
+    document.getElementById('uploadForm').addEventListener('submit', handleSubmit);
+
+    // Initial setup - add first recipient
+    addRecipient({ role: 'Artist', percentage: 100 });
+  </script>
+</body>
+</html>
