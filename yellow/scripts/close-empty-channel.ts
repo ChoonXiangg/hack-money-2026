@@ -86,17 +86,16 @@ async function main() {
                 try {
                     // Try to close the channel on-chain directly
                     // Since there are no funds, this should be safe
-                    const closeResult = await nitroliteClient.closeChannel({
-                        channelId,
-                        candidateState: data.lastValidState,
+                    const closeTxHash = await nitroliteClient.closeChannel({
+                        finalState: data.lastValidState,
                         proofStates: [],
                     });
 
-                    console.log(`  Close TX: ${closeResult.txHash}`);
+                    console.log(`  Close TX: ${closeTxHash}`);
 
                     // Wait for confirmation
                     const receipt = await publicClient.waitForTransactionReceipt({
-                        hash: closeResult.txHash,
+                        hash: closeTxHash,
                     });
 
                     if (receipt.status === 'success') {

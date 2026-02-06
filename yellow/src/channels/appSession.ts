@@ -6,10 +6,10 @@ import {
     RPCProtocolVersion,
     RPCAppStateIntent,
 } from '@erc7824/nitrolite';
-import type { PublicClient, Address, Hash } from 'viem';
+import type { PublicClient, Address, Hash, WalletClient } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
-import type { CreateAppSessionResponse, CloseAppSessionResponse } from '../types';
+import type { CreateAppSessionResponse, CloseAppSessionResponse, ListeningActivity } from '../types';
 import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS, SESSION_CONFIG } from '../config';
 import { depositToCustody } from './resize';
 import { getTokenBalance } from './relayer';
@@ -30,10 +30,11 @@ export interface CreateAppSessionParams {
 /**
  * Create an App Session between user and relayer
  * User deposits their funds, relayer starts with 0
+ * Returns server-confirmed session ID, version, and allocations
  */
 export async function createAppSession(
     params: CreateAppSessionParams
-): Promise<`0x${string}`> {
+): Promise<CreateAppSessionResult> {
     const {
         ws,
         sessionKeyPair,
@@ -85,13 +86,21 @@ export async function createAppSession(
     return waitForAppSessionCreation(ws);
 }
 
+/** Result from creating an App Session */
+export interface CreateAppSessionResult {
+    appSessionId: `0x${string}`;
+    version: number;
+    allocations: Array<{ participant: string; asset: string; amount: string }>;
+}
+
 /**
  * Wait for App Session creation confirmation
+ * Returns the full server response including allocations (like reference code)
  */
 function waitForAppSessionCreation(
     ws: WebSocket,
     timeoutMs: number = TIMING.wsMessageTimeout
-): Promise<`0x${string}`> {
+): Promise<CreateAppSessionResult> {
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             ws.off('message', handler);
@@ -102,11 +111,35 @@ function waitForAppSessionCreation(
             try {
                 const msg = JSON.parse(data.toString());
                 if (msg.res && msg.res[1] === 'create_app_session') {
-                    const payload = msg.res[2] as CreateAppSessionResponse;
+                    const payload = msg.res[2];
+
+                    // DEBUG: Log raw server response
+                    console.log('  [DEBUG] Raw create_app_session response:');
+                    console.log('    payload type:', typeof payload);
+                    console.log('    payload:', JSON.stringify(payload, null, 2));
+
+                    // Handle both array and object response formats
+                    const sessionData = Array.isArray(payload) ? payload[0] : payload;
+                    const sessionId = sessionData?.app_session_id || sessionData?.sessionId;
+
+                    // DEBUG: Log parsed session data
+                    console.log('  [DEBUG] Parsed sessionData:');
+                    console.log('    sessionData:', JSON.stringify(sessionData, null, 2));
+                    console.log('    sessionId:', sessionId);
+                    console.log('    version:', sessionData?.version);
+                    console.log('    allocations:', JSON.stringify(sessionData?.allocations));
+
                     clearTimeout(timeout);
                     ws.off('message', handler);
-                    console.log(`  ✓ App Session created: ${payload.app_session_id}`);
-                    resolve(payload.app_session_id);
+                    console.log(`  ✓ App Session created: ${sessionId}`);
+                    console.log(`    Version: ${sessionData?.version || 1}`);
+                    console.log(`    Allocations: ${JSON.stringify(sessionData?.allocations || [])}`);
+
+                    resolve({
+                        appSessionId: sessionId,
+                        version: sessionData?.version || 1,
+                        allocations: sessionData?.allocations || [],
+                    });
                 }
                 if (msg.error) {
                     clearTimeout(timeout);
@@ -372,14 +405,23 @@ export interface StartAppSessionParams {
     tokenSymbol?: string;
 }
 
+/** Result from starting an App Session */
+export interface StartAppSessionResult {
+    appSessionId: `0x${string}`;
+    depositTxHash?: Hash;
+    version: number;
+    allocations: Array<{ participant: string; asset: string; amount: string }>;
+}
+
 /**
  * Start an App Session with deposit
  * 1. Check/deposit to custody if needed
  * 2. Create App Session with user funds and relayer at 0
+ * Returns server-confirmed session state (like reference code)
  */
 export async function startAppSession(
     params: StartAppSessionParams
-): Promise<{ appSessionId: `0x${string}`; depositTxHash?: Hash }> {
+): Promise<StartAppSessionResult> {
     const {
         ws,
         client,
@@ -433,7 +475,7 @@ export async function startAppSession(
     }
 
     // Step 2: Create App Session
-    const appSessionId = await createAppSession({
+    const sessionResult = await createAppSession({
         ws,
         sessionKeyPair,
         userAddress,
@@ -442,9 +484,16 @@ export async function startAppSession(
         tokenSymbol,
     });
 
-    console.log(`✓ App Session started: ${appSessionId}`);
+    console.log(`✓ App Session started: ${sessionResult.appSessionId}`);
+    console.log(`  Version: ${sessionResult.version}`);
+    console.log(`  Allocations: ${sessionResult.allocations.length} participants`);
 
-    return { appSessionId, depositTxHash };
+    return {
+        appSessionId: sessionResult.appSessionId,
+        depositTxHash,
+        version: sessionResult.version,
+        allocations: sessionResult.allocations,
+    };
 }
 
 // ============================================================================
@@ -455,29 +504,37 @@ export interface EndAppSessionParams {
     ws: WebSocket;
     client: NitroliteClient;
     publicClient: PublicClient;
+    walletClient: WalletClient;
     sessionKeyPair: SessionKeyPair;
     appSessionId: `0x${string}`;
     userAddress: Address;
     relayerAddress: Address;
     totalSpent: bigint;
     depositAmount: bigint;
+    listeningActivity: ListeningActivity;
     tokenSymbol?: string;
 }
 
 export interface EndAppSessionResult {
     closeResponse: CloseAppSessionResponse;
     userWithdrawTxHash?: Hash;
+    relayerTransferTxHash?: Hash;
     relayerReceived: bigint;
     userRefund: bigint;
+    /** Listening activity for relayer to process artist payouts */
+    listeningActivity: ListeningActivity;
 }
 
 /**
  * End an App Session with proper fund distribution
- * 1. Calculate split: user gets refund, relayer gets spent amount
- * 2. Close App Session with final allocations
- * 3. User withdraws their refund from custody
  *
- * Note: Relayer needs to withdraw their funds separately
+ * Flow:
+ * 1. Calculate split: user gets refund, relayer gets spent amount
+ * 2. Close App Session with final allocations (this sets the final state)
+ * 3. User withdraws ONLY their allocated portion (not full custody)
+ * 4. Relayer withdraws their portion separately (via relayer:withdraw)
+ *
+ * NO ERC20 transfers - funds are distributed via App Session allocations
  */
 export async function endAppSession(
     params: EndAppSessionParams
@@ -492,6 +549,7 @@ export async function endAppSession(
         relayerAddress,
         totalSpent,
         depositAmount,
+        listeningActivity,
         tokenSymbol = 'ytest.usd',
     } = params;
 
@@ -514,6 +572,8 @@ export async function endAppSession(
     }
 
     // Step 1: Close App Session with final allocations
+    // This sets the final state - funds will be distributed according to allocations
+    console.log('\n  [Step 1] Closing App Session with final allocations...');
     const closeResponse = await closeAppSession({
         ws,
         sessionKeyPair,
@@ -525,30 +585,55 @@ export async function endAppSession(
         tokenSymbol,
     });
 
+    // Log close response details
+    console.log('  Close response:', JSON.stringify(closeResponse, null, 2));
+
     // Wait for close to process
     console.log('  Waiting for settlement to process...');
     await new Promise(r => setTimeout(r, 5000));
 
     // Step 2: Check custody balances after close
     const userCustodyBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-    console.log(`  User custody balance after close: ${formatUSDCDisplay(userCustodyBalance)}`);
+    console.log(`\n  [Step 2] Checking balances after close...`);
+    console.log(`    User custody balance: ${formatUSDCDisplay(userCustodyBalance)}`);
+    console.log(`    Expected user allocation: ${formatUSDCDisplay(userRefund)}`);
+    console.log(`    Relayer should have: ${formatUSDCDisplay(relayerPayment)} (in their custody)`);
 
-    // Step 3: User withdraws their refund from custody
+    // Step 3: User withdraws ONLY their allocated portion
     let userWithdrawTxHash: Hash | undefined;
 
-    if (userCustodyBalance > 0n) {
-        console.log(`  Withdrawing ${formatUSDCDisplay(userCustodyBalance)} from user custody...`);
+    console.log(`\n  [Step 3] User withdrawing allocated portion...`);
+
+    // Withdraw only the user's allocated amount, not the full custody balance
+    const withdrawAmount = userRefund > 0n ? userRefund : 0n;
+
+    if (withdrawAmount > 0n) {
+        console.log(`    Withdrawing ${formatUSDCDisplay(withdrawAmount)} (user's allocation)`);
 
         try {
-            userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, userCustodyBalance);
-            console.log(`  ✓ User withdrawal TX: ${userWithdrawTxHash}`);
+            userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, withdrawAmount);
+            console.log(`    ✓ User withdrawal TX: ${userWithdrawTxHash}`);
 
             // Wait for confirmation
             await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
-            console.log('  ✓ User withdrawal confirmed');
+            console.log('    ✓ User withdrawal confirmed');
         } catch (err) {
-            console.log(`  ⚠ User withdrawal failed: ${err}`);
+            console.log(`    ⚠ User withdrawal failed: ${err}`);
+            // Try withdrawing full custody if allocation-based withdrawal fails
+            console.log(`    Trying to withdraw full custody balance instead...`);
+            try {
+                if (userCustodyBalance > 0n) {
+                    userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, userCustodyBalance);
+                    console.log(`    ✓ Fallback withdrawal TX: ${userWithdrawTxHash}`);
+                    await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
+                    console.log('    ✓ Fallback withdrawal confirmed');
+                }
+            } catch (fallbackErr) {
+                console.log(`    ⚠ Fallback withdrawal also failed: ${fallbackErr}`);
+            }
         }
+    } else {
+        console.log(`    No refund due (user spent entire deposit)`);
     }
 
     // Verify final balances
@@ -557,15 +642,23 @@ export async function endAppSession(
     const finalUserWallet = await getTokenBalance(publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
     const finalUserCustody = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
 
-    console.log('\n  Final balances:');
+    console.log('\n  [Final Balances]');
     console.log(`    User wallet: ${formatUSDCDisplay(finalUserWallet)}`);
-    console.log(`    User custody: ${formatUSDCDisplay(finalUserCustody)} (should be 0)`);
-    console.log(`    Relayer received: ${formatUSDCDisplay(relayerPayment)} (in their custody)`);
+    console.log(`    User custody: ${formatUSDCDisplay(finalUserCustody)}`);
+    console.log(`    Relayer allocation: ${formatUSDCDisplay(relayerPayment)} (withdraw via relayer:withdraw)`);
+
+    // Log listening activity for verification
+    console.log(`\n  Listening Activity (${listeningActivity.length} songs):`);
+    for (const record of listeningActivity) {
+        console.log(`    - ${record.songListened}: ${formatUSDCDisplay(record.amountSpent)}`);
+    }
 
     return {
         closeResponse,
         userWithdrawTxHash,
+        relayerTransferTxHash: undefined, // No ERC20 transfer - relayer withdraws from their custody
         relayerReceived: relayerPayment,
         userRefund,
+        listeningActivity,
     };
 }

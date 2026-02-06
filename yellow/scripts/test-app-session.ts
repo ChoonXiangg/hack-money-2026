@@ -126,8 +126,8 @@ async function main() {
         console.log('\n[STEP 3] Simulating playback...');
 
         const song = SAMPLE_SONGS[0];
-        console.log(`  Playing: "${song.title}" by ${song.artist.name}`);
-        console.log(`  Price: ${formatUSDCDisplay(song.pricePerSecond)}/second`);
+        console.log(`  Playing: "${song.songName}"`);
+        console.log(`  Price: ${song.pricePerSecond} USDC/second`);
 
         service.startPlay(song);
 
@@ -142,8 +142,8 @@ async function main() {
         }
 
         // Stop playback
-        const playResult = service.stopPlay();
-        console.log(`  Stopped: "${song.title}"`);
+        const playResult = await service.stopPlay();
+        console.log(`  Stopped: "${song.songName}"`);
         console.log(`  Play cost: ${formatUSDCDisplay(playResult?.totalCost || 0n)}`);
 
         // Get session state before ending

@@ -156,7 +156,7 @@ async function main() {
         await sleep(2000); // Listen for 2 more seconds
 
         // Stop playback
-        const playResult = service.stopPlay();
+        const playResult = await service.stopPlay();
         console.log(`\n✓ Stopped playback`);
         if (playResult) {
             console.log(`  Last play cost: ${formatUSDCDisplay(playResult.totalCost)}`);
