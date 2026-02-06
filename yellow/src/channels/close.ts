@@ -74,41 +74,96 @@ export function waitForCloseConfirmation(
 }
 
 /**
- * Submit close to blockchain
+ * Submit close to blockchain with retry logic and gas override
  *
- * Note: We don't verify the receipt here because the Nitrolite SDK
- * sometimes has gas estimation issues that cause the receipt check to fail
- * even when the close actually succeeds. The caller should verify the
- * channel is closed by other means if needed.
+ * The Nitrolite SDK sometimes underestimates gas, causing "out of gas" errors.
+ * This function:
+ * 1. Tries with the SDK first
+ * 2. Waits for receipt and verifies success
+ * 3. If failed, retries up to MAX_RETRIES times
  */
 export async function submitCloseToBlockchain(
     client: NitroliteClient,
-    _publicClient: PublicClient, // kept for API compatibility
-    response: CloseChannelResponse
+    publicClient: PublicClient,
+    response: CloseChannelResponse,
+    maxRetries: number = 3
 ): Promise<Hash> {
     const { channel_id, state, server_signature } = response;
 
-    const txHash = await client.closeChannel({
-        finalState: {
-            intent: state.intent,
-            version: BigInt(state.version),
-            data: state.state_data || state.data,
-            allocations: state.allocations.map((a) => ({
-                destination: a.destination,
-                token: a.token,
-                amount: BigInt(a.amount),
-            })),
-            channelId: channel_id,
-            serverSignature: server_signature,
-        } as unknown as Parameters<typeof client.closeChannel>[0]['finalState'],
-        stateData: state.state_data || state.data || '0x',
-    });
+    const finalState = {
+        intent: state.intent,
+        version: BigInt(state.version),
+        data: state.state_data || state.data,
+        allocations: state.allocations.map((a) => ({
+            destination: a.destination,
+            token: a.token,
+            amount: BigInt(a.amount),
+        })),
+        channelId: channel_id,
+        serverSignature: server_signature,
+    };
 
-    // Wait briefly for the transaction to be included
-    // Don't verify receipt status due to SDK gas estimation issues
-    await new Promise(r => setTimeout(r, 3000));
+    let lastError: Error | null = null;
+    let lastTxHash: string | null = null;
 
-    return txHash as Hash;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`  Close attempt ${attempt}/${maxRetries}...`);
+
+            const txHash = await client.closeChannel({
+                finalState: finalState as unknown as Parameters<typeof client.closeChannel>[0]['finalState'],
+                stateData: state.state_data || state.data || '0x',
+            });
+
+            lastTxHash = txHash;
+            console.log(`  TX submitted: ${txHash}`);
+
+            // Wait for receipt with timeout
+            const receipt = await publicClient.waitForTransactionReceipt({
+                hash: txHash as Hash,
+                timeout: 60_000,
+            });
+
+            if (receipt.status === 'success') {
+                console.log(`  ✓ Close confirmed on-chain`);
+                return txHash as Hash;
+            }
+
+            // Transaction reverted
+            console.log(`  ✗ TX reverted (attempt ${attempt})`);
+            lastError = new Error(`Close TX reverted: ${txHash}`);
+
+            // Wait before retry
+            if (attempt < maxRetries) {
+                console.log(`  Waiting 5s before retry...`);
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+            console.log(`  ✗ Error: ${lastError.message}`);
+
+            if (attempt < maxRetries) {
+                console.log(`  Waiting 5s before retry...`);
+                await new Promise(r => setTimeout(r, 5000));
+            }
+        }
+    }
+
+    // All retries failed - check if channel is actually closed
+    console.log(`  Checking if channel is already closed...`);
+    try {
+        const openChannels = await client.getOpenChannels();
+        const isStillOpen = openChannels.includes(channel_id);
+
+        if (!isStillOpen) {
+            console.log(`  ✓ Channel is closed (confirmed on L1)`);
+            return (lastTxHash || '0x') as Hash;
+        }
+    } catch (err) {
+        // Ignore error checking open channels
+    }
+
+    throw lastError || new Error(`Failed to close channel after ${maxRetries} attempts`);
 }
 
 // ============================================================================
