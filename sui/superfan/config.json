@@ -1,0 +1,30 @@
+{
+  "network": "testnet",
+  "packageId": "0x8b8cb9a484cde96919ee9104c63e94fa5d453a678fd306a7615aa16014ccd6a2",
+  "module": "badge",
+  "functions": {
+    "mint_badge": {
+      "description": "Mint a new FanBadge for the sender",
+      "params": ["artist_id: address"]
+    },
+    "add_listen_time": {
+      "description": "Add listening time to a badge",
+      "params": ["badge: &mut FanBadge", "seconds: u64"]
+    },
+    "update_tier": {
+      "description": "Update tier based on listen_seconds (1hr=Silver, 10hr=Gold)",
+      "params": ["badge: &mut FanBadge"]
+    },
+    "get_listen_seconds": {
+      "description": "Get total listen seconds for a badge",
+      "params": ["badge: &FanBadge"],
+      "returns": "u64"
+    },
+    "get_tier": {
+      "description": "Get current tier of a badge (1=Bronze, 2=Silver, 3=Gold)",
+      "params": ["badge: &FanBadge"],
+      "returns": "u8"
+    }
+  },
+  "testBadgeId": "0xaf00964bc3a888295029ac32e04f314db71a4f3cb634ed0c283f886bd9085ce8"
+}
