@@ -105,8 +105,8 @@ async function main() {
         console.log('\n[Step 4] Simulating playback...');
 
         const song = SAMPLE_SONGS[0];
-        console.log(`\n🎵 Playing: "${song.title}" by ${song.artist.name}`);
-        console.log(`   Price: ${formatUSDCDisplay(song.pricePerSecond)}/second`);
+        console.log(`\n🎵 Playing: "${song.songName}"`);
+        console.log(`   Price: ${song.pricePerSecond} USDC/second`);
         service.startPlay(song);
 
         // Simulate 1 second of playback (deposit is 200 units, price is 100/sec)
@@ -121,8 +121,8 @@ async function main() {
         console.log(); // New line after ticker
 
         // Stop playback
-        const playResult = service.stopPlay();
-        console.log(`\n✓ Stopped: "${song.title}"`);
+        const playResult = await service.stopPlay();
+        console.log(`\n✓ Stopped: "${song.songName}"`);
         console.log(`  Total play cost: ${formatUSDCDisplay(playResult?.totalCost || 0n)}`);
 
         // Get session state before ending

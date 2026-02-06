@@ -81,6 +81,8 @@ export class YellowService extends EventEmitter {
     private appSessionId: `0x${string}` | null = null;
     /** App Session version for state updates (microtransactions) */
     private appSessionVersion: number = 1;
+    /** Server-confirmed allocations for App Session (tracks actual state) */
+    private appSessionAllocations: Array<{ participant: string; asset: string; amount: string }> = [];
 
     constructor(config: YellowServiceConfig) {
         super();
@@ -306,7 +308,7 @@ export class YellowService extends EventEmitter {
         console.log(`    User custody: ${formatUSDCDisplay(custodyBefore)}`);
 
         // Start App Session (handles deposit if needed)
-        const { appSessionId, depositTxHash } = await startAppSession({
+        const sessionResult = await startAppSession({
             ws: this.ws,
             client: this.clients.nitroliteClient,
             publicClient: this.clients.publicClient,
@@ -316,8 +318,28 @@ export class YellowService extends EventEmitter {
             depositAmount,
         });
 
-        this.appSessionId = appSessionId;
-        this.appSessionVersion = 1; // Reset version for new session
+        // Store server-confirmed state (like reference code does)
+        this.appSessionId = sessionResult.appSessionId;
+        this.appSessionVersion = sessionResult.version;
+        this.appSessionAllocations = sessionResult.allocations;
+
+        // DEBUG: Log what we stored
+        console.log('\n  [DEBUG] Stored session state:');
+        console.log('    appSessionId:', this.appSessionId);
+        console.log('    appSessionVersion:', this.appSessionVersion);
+        console.log('    appSessionAllocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+
+        // If allocations are empty, initialize them with expected values
+        if (this.appSessionAllocations.length === 0) {
+            console.log('    [WARNING] Server returned empty allocations, initializing locally');
+            this.appSessionAllocations = [
+                { participant: userAddress, asset: 'ytest.usd', amount: depositAmount.toString() },
+                { participant: relayerAddress, asset: 'ytest.usd', amount: '0' },
+            ];
+            console.log('    Initialized allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+        }
+
+        const { depositTxHash } = sessionResult;
 
         if (depositTxHash) {
             console.log(`  Deposit TX: ${depositTxHash}`);
@@ -332,14 +354,14 @@ export class YellowService extends EventEmitter {
         console.log(`    User custody: ${formatUSDCDisplay(custodyAfter)} (should be 0, funds in session)`);
 
         // Start session tracking (use appSessionId as channelId for compatibility)
-        this.sessionManager.startSession(appSessionId, depositAmount);
+        this.sessionManager.startSession(this.appSessionId, depositAmount);
 
         const state = this.sessionManager.getState();
         this.emit('session:started', state);
-        this.emit('channel:created', appSessionId);
-        this.emit('channel:funded', appSessionId, depositAmount);
+        this.emit('channel:created', this.appSessionId);
+        this.emit('channel:funded', this.appSessionId, depositAmount);
 
-        console.log(`\n✓ App Session started: ${appSessionId}`);
+        console.log(`\n✓ App Session started: ${this.appSessionId}`);
 
         return state;
     }
@@ -477,12 +499,14 @@ export class YellowService extends EventEmitter {
             ws: this.ws,
             client: this.clients.nitroliteClient,
             publicClient: this.clients.publicClient,
+            walletClient: this.clients.walletClient,
             sessionKeyPair: this.sessionKeyPair,
             appSessionId: this.appSessionId,
             userAddress,
             relayerAddress,
             totalSpent,
             depositAmount,
+            listeningActivity,
         });
 
         // Check balances AFTER close and withdrawal
@@ -830,6 +854,11 @@ export class YellowService extends EventEmitter {
     /**
      * Submit an off-chain microtransaction (state update)
      * This is called when switching songs to record payment for the current song
+     *
+     * IMPORTANT: Uses server-confirmed allocations (like reference code)
+     * - Start from last confirmed allocations
+     * - Apply delta (song cost: subtract from user, add to relayer)
+     * - Update allocations from server response
      */
     private async submitMicrotransaction(): Promise<void> {
         if (!this.config.useAppSessions || !this.appSessionId) {
@@ -848,45 +877,98 @@ export class YellowService extends EventEmitter {
         // Stop current play to finalize cost calculation
         this.sessionManager.stopCurrentPlay();
 
-        // Get current totals
-        const totalSpent = this.sessionManager.getTotalSpent();
-        const depositAmount = this.sessionManager.getState().depositAmount;
-        const userBalance = depositAmount - totalSpent;
-        const relayerBalance = totalSpent;
-
         const userAddress = this.clients.account.address;
         const relayerAddress = this.config.relayerAddress!;
 
-        // Increment version and submit state update
+        // DEBUG: Log what we have
+        console.log('\n  [DEBUG] App Session Allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+        console.log('  [DEBUG] Looking for userAddress:', userAddress);
+        console.log('  [DEBUG] Looking for relayerAddress:', relayerAddress);
+
+        // FIX: More robust allocation finding
+        let currentUserBalance: bigint;
+        let currentRelayerBalance: bigint;
+
+        const userAlloc = this.appSessionAllocations.find(
+            a => a.participant.toLowerCase() === userAddress.toLowerCase()
+        );
+        const relayerAlloc = this.appSessionAllocations.find(
+            a => a.participant.toLowerCase() === relayerAddress.toLowerCase()
+        );
+
+        console.log('  [DEBUG] Found userAlloc:', userAlloc);
+        console.log('  [DEBUG] Found relayerAlloc:', relayerAlloc);
+
+        // Use allocations if found, otherwise use deposit amount as starting point
+        if (userAlloc && userAlloc.amount) {
+            currentUserBalance = BigInt(userAlloc.amount);
+        } else {
+            // Fallback: user should have full deposit minus any previous spending
+            const totalSpent = this.sessionManager.getTotalSpent();
+            currentUserBalance = this.sessionManager.getState().depositAmount - totalSpent;
+            console.log('  [WARNING] No userAlloc found, using deposit - spent:', formatUSDCDisplay(currentUserBalance));
+        }
+
+        if (relayerAlloc && relayerAlloc.amount) {
+            currentRelayerBalance = BigInt(relayerAlloc.amount);
+        } else {
+            // Fallback: relayer should have received all spending so far
+            currentRelayerBalance = this.sessionManager.getTotalSpent();
+            console.log('  [WARNING] No relayerAlloc found, using totalSpent:', formatUSDCDisplay(currentRelayerBalance));
+        }
+
+        // Calculate new allocations by applying delta (song cost)
+        const songCost = currentPlay.totalCost;
+        const newUserBalance = currentUserBalance - songCost;
+        const newRelayerBalance = currentRelayerBalance + songCost;
+
+        // Increment version for this state update
         this.appSessionVersion++;
 
         console.log(`\n  [Song Switch - Microtransaction v${this.appSessionVersion}]`);
         console.log(`    Song: ${currentPlay.songId}`);
-        console.log(`    Cost: ${formatUSDCDisplay(currentPlay.totalCost)}`);
-        console.log(`    User balance: ${formatUSDCDisplay(userBalance)}`);
-        console.log(`    Relayer balance: ${formatUSDCDisplay(relayerBalance)}`);
+        console.log(`    Cost: ${formatUSDCDisplay(songCost)}`);
+        console.log(`    Previous: user=${formatUSDCDisplay(currentUserBalance)}, relayer=${formatUSDCDisplay(currentRelayerBalance)}`);
+        console.log(`    New: user=${formatUSDCDisplay(newUserBalance)}, relayer=${formatUSDCDisplay(newRelayerBalance)}`);
 
         try {
-            await submitAppState({
+            const result = await submitAppState({
                 ws: this.ws,
                 sessionKeyPair: this.sessionKeyPair,
                 appSessionId: this.appSessionId,
                 userAddress,
                 relayerAddress,
-                userBalance,
-                relayerBalance,
+                userBalance: newUserBalance,
+                relayerBalance: newRelayerBalance,
                 version: this.appSessionVersion,
             });
+
+            // Update allocations from server response (like reference code)
+            if (result.success) {
+                // Update version from server response
+                if (result.version > this.appSessionVersion) {
+                    this.appSessionVersion = result.version;
+                }
+
+                // Update allocations with correct asset from initial session
+                const asset = this.appSessionAllocations[0]?.asset || 'ytest.usd';
+                this.appSessionAllocations = [
+                    { participant: userAddress, asset, amount: newUserBalance.toString() },
+                    { participant: relayerAddress, asset, amount: newRelayerBalance.toString() },
+                ];
+
+                console.log(`    ✓ Server confirmed v${this.appSessionVersion}`);
+                console.log('    Updated allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+            }
 
             this.emit('transfer:completed', {
                 success: true,
                 destination: relayerAddress,
-                amount: currentPlay.totalCost,
+                amount: songCost,
                 timestamp: Date.now(),
             });
         } catch (err) {
-            console.log(`    ⚠ Microtransaction failed (continuing with local tracking): ${err}`);
-            // Continue anyway - the local state is still accurate
+            console.log(`    ⚠ Microtransaction failed: ${err}`);
         }
     }
 
