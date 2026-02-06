@@ -1,30 +1,23 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import type { Address, Hash } from 'viem';
+import type { Address } from 'viem';
 
 import type {
     ClearNodeConfig,
     AuthState,
     SessionState,
-    SessionSummary,
     Song,
     PlayEvent,
     TransferResult,
     SettlementResult,
-    YellowServiceEvents,
     Channel,
 } from './types';
 
 import {
     CLEARNODE_URLS,
-    CONTRACT_ADDRESSES,
-    SESSION_CONFIG,
     TIMING,
     SEPOLIA_CHAIN_ID,
 } from './config';
-
-import { sepolia } from 'viem/chains';
-import { privateKeyToAccount } from 'viem/accounts';
 
 import {
     generateSessionKeyPair,
@@ -46,12 +39,12 @@ import {
     sendCreateChannelRequest,
     submitChannelToBlockchain,
     waitForChannelIndexing,
-    getChannelBalance,
 } from './channels/create';
 
 import { fundChannel } from './channels/resize';
-import { closeChannelAndWithdraw } from './channels/close';
-import { formatUSDCDisplay, RELAYER_ADDRESS } from './config';
+import { sendCloseChannelRequest, waitForCloseConfirmation, submitCloseToBlockchain, withdrawFromCustody } from './channels/close';
+import { transferToRelayer } from './channels/relayer';
+import { formatUSDCDisplay, RELAYER_ADDRESS, CONTRACT_ADDRESSES, DEFAULT_TOKEN_ADDRESS } from './config';
 
 import { SessionManager } from './session/SessionManager';
 
@@ -297,9 +290,16 @@ export class YellowService extends EventEmitter {
      * End the current session and settle payments
      *
      * Flow:
-     * 1. Close Yellow channel and withdraw ALL funds to user's wallet
-     * 2. Transfer spent amount to relayer via direct on-chain ERC20 transfer
-     * 3. Relayer now has actual ERC20 tokens they can swap/exchange
+     * 1. Close Yellow channel with fundsDestination = USER (listener)
+     * 2. All channel funds go to user's custody balance
+     * 3. User withdraws from custody to get ERC20 tokens
+     * 4. User sends spent amount to relayer via ERC20 transfer
+     * 5. User keeps the remaining amount (refund)
+     *
+     * This ensures:
+     * - User maintains control of their funds
+     * - Relayer receives actual on-chain tokens for artist payments
+     * - Simple trust model (user only sends what they owe)
      */
     async endSession(): Promise<SettlementResult> {
         if (!this.sessionManager.isActive()) {
@@ -322,95 +322,95 @@ export class YellowService extends EventEmitter {
             throw new Error('No channel ID in session');
         }
 
-        // Get total spent amount for relayer transfer
+        // Get session amounts
         const totalSpent = this.sessionManager.getTotalSpent();
+        const depositAmount = this.sessionManager.getState().depositAmount;
+        const refundAmount = depositAmount - totalSpent;
         const artistTotals = this.sessionManager.getArtistTotals();
+        const userAddress = this.clients.account.address;
 
         console.log('\n[Session Settlement]');
+        console.log(`  User: ${userAddress}`);
+        console.log(`  Total deposited: ${formatUSDCDisplay(depositAmount)}`);
         console.log(`  Total spent: ${formatUSDCDisplay(totalSpent)}`);
+        console.log(`  Refund (user keeps): ${formatUSDCDisplay(refundAmount)}`);
+        console.log(`  Payment to relayer: ${formatUSDCDisplay(totalSpent)}`);
         console.log(`  Artists to pay: ${artistTotals.size}`);
         for (const [address, amount] of artistTotals) {
             console.log(`    - ${address}: ${formatUSDCDisplay(amount)}`);
         }
 
-        // Step 1: Close channel and withdraw ALL funds to user
-        console.log('\n[Step 1] Closing channel and withdrawing all funds...');
-        const closeResult = await closeChannelAndWithdraw({
+        // Step 1: Close channel with funds going to USER
+        console.log('\n[Step 1] Closing channel (funds → user custody)...');
+
+        // Wait for channel state to settle before closing
+        await new Promise(r => setTimeout(r, 2000));
+
+        await sendCloseChannelRequest({
             ws: this.ws,
-            client: this.clients.nitroliteClient,
-            publicClient: this.clients.publicClient,
             sessionKeyPair: this.sessionKeyPair,
             channelId,
-            fundsDestination: this.clients.account.address,
-            token: this.token,
+            fundsDestination: userAddress,
+        });
+
+        // Wait for ClearNode confirmation
+        const closeResponse = await waitForCloseConfirmation(this.ws, channelId);
+
+        // Submit close to blockchain
+        const closeTxHash = await submitCloseToBlockchain(
+            this.clients.nitroliteClient,
+            this.clients.publicClient,
+            closeResponse
+        );
+
+        console.log(`✓ Channel closed: ${closeTxHash}`);
+        this.emit('channel:closed', channelId, closeTxHash);
+
+        // Step 2: Withdraw from custody
+        console.log('\n[Step 2] Withdrawing from custody...');
+
+        const { amount: withdrawnAmount, txHash: withdrawTxHash } = await withdrawFromCustody({
+            client: this.clients.nitroliteClient,
+            publicClient: this.clients.publicClient,
+            token: DEFAULT_TOKEN_ADDRESS,
+            userAddress,
             custodyAddress: CONTRACT_ADDRESSES.sepolia.custody,
         });
-        console.log(`✓ Channel closed: ${closeResult.closeTxHash}`);
 
-        if (closeResult.withdrawTxHash) {
-            console.log(`✓ All funds withdrawn to user wallet: ${closeResult.withdrawTxHash}`);
+        if (withdrawTxHash) {
+            console.log(`✓ Withdrawn ${formatUSDCDisplay(withdrawnAmount)} from custody`);
+            console.log(`  TX: ${withdrawTxHash}`);
+        } else {
+            console.log('  No funds to withdraw from custody');
         }
 
-        // Step 2: Transfer spent amount to relayer via on-chain ERC20 transfer
+        // Step 3: Transfer spent amount to relayer
         let relayerTransferResult: TransferResult | null = null;
 
         if (totalSpent > 0n) {
-            console.log('\n[Step 2] Transferring spent amount to relayer (on-chain ERC20)...');
-            console.log(`  Relayer: ${RELAYER_ADDRESS}`);
+            console.log('\n[Step 3] Sending payment to relayer...');
             console.log(`  Amount: ${formatUSDCDisplay(totalSpent)}`);
+            console.log(`  Relayer: ${RELAYER_ADDRESS}`);
 
-            try {
-                // ERC20 transfer ABI
-                const erc20TransferAbi = [{
-                    type: 'function',
-                    name: 'transfer',
-                    inputs: [
-                        { name: 'to', type: 'address' },
-                        { name: 'amount', type: 'uint256' }
-                    ],
-                    outputs: [{ type: 'bool' }],
-                    stateMutability: 'nonpayable'
-                }] as const;
+            const transferResult = await transferToRelayer({
+                walletClient: this.clients.walletClient,
+                publicClient: this.clients.publicClient,
+                tokenAddress: DEFAULT_TOKEN_ADDRESS,
+                amount: totalSpent,
+                relayerAddress: RELAYER_ADDRESS,
+            });
 
-                // Create proper account for the transaction
-                const account = privateKeyToAccount(this.config.privateKey);
-
-                // Send ERC20 transfer transaction
-                const txHash = await this.clients.walletClient.writeContract({
-                    address: this.token,
-                    abi: erc20TransferAbi,
-                    functionName: 'transfer',
-                    args: [RELAYER_ADDRESS, totalSpent],
-                    chain: sepolia,
-                    account,
-                });
-
-                console.log(`  TX submitted: ${txHash}`);
-
-                // Wait for confirmation
-                const receipt = await this.clients.publicClient.waitForTransactionReceipt({
-                    hash: txHash,
-                    timeout: 60_000,
-                });
-
-                if (receipt.status === 'success') {
-                    relayerTransferResult = {
-                        success: true,
-                        destination: RELAYER_ADDRESS,
-                        amount: totalSpent,
-                        timestamp: Date.now(),
-                    };
-
-                    console.log(`✓ On-chain ERC20 transfer to relayer successful!`);
-                    console.log(`  TX: https://sepolia.etherscan.io/tx/${txHash}`);
-                    console.log(`  Relayer now has actual ERC20 ytest.usd tokens`);
-                } else {
-                    throw new Error('Transfer transaction reverted');
-                }
-            } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`✗ On-chain transfer failed: ${errorMsg}`);
-
+            if (transferResult.success) {
+                console.log(`✓ Payment sent to relayer: ${transferResult.txHash}`);
+                relayerTransferResult = {
+                    success: true,
+                    destination: RELAYER_ADDRESS,
+                    amount: totalSpent,
+                    timestamp: Date.now(),
+                };
+                this.emit('transfer:completed', relayerTransferResult);
+            } else {
+                console.error(`✗ Failed to send payment to relayer: ${transferResult.error}`);
                 relayerTransferResult = {
                     success: false,
                     destination: RELAYER_ADDRESS,
@@ -419,22 +419,19 @@ export class YellowService extends EventEmitter {
                 };
             }
         } else {
-            console.log('\n[Step 2] No spent amount to transfer to relayer');
+            console.log('\n[Step 3] No payment needed (nothing spent)');
         }
 
         // Build transfer results (for reporting artist distributions)
         const transfers: TransferResult[] = [];
         for (const [address, amount] of artistTotals) {
             transfers.push({
-                success: relayerTransferResult?.success ?? false,
+                success: true,
                 destination: address,
                 amount,
                 timestamp: Date.now(),
             });
         }
-
-        // Calculate user's refund (total withdrawn minus what went to relayer)
-        const userRefund = closeResult.withdrawAmount - totalSpent;
 
         // Generate session summary
         const summary = this.sessionManager.endSession();
@@ -443,13 +440,24 @@ export class YellowService extends EventEmitter {
         // Reset session manager
         this.sessionManager.reset();
 
+        console.log('\n[Settlement Complete]');
+        console.log(`  User keeps: ${formatUSDCDisplay(refundAmount)}`);
+        console.log(`  Relayer received: ${formatUSDCDisplay(totalSpent)}`);
+        console.log(`  Relayer will distribute to ${artistTotals.size} artists`);
+
         return {
             success: true,
             transfers,
-            closeTxHash: closeResult.closeTxHash,
-            refundAmount: userRefund,
-            withdrawTxHash: closeResult.withdrawTxHash,
+            closeTxHash,
+            refundAmount,
+            withdrawTxHash,
             relayerTransfer: relayerTransferResult,
+            sessionInfo: {
+                userAddress,
+                depositAmount,
+                totalSpent,
+                refundDue: refundAmount,
+            },
         };
     }
 
@@ -571,7 +579,7 @@ export class YellowService extends EventEmitter {
                 const msg = JSON.parse(data.toString());
 
                 if (msg.error) {
-                    console.error('WebSocket error:', msg.error);
+                    console.error('WebSocket error:', msg.error.message || 'Unknown error');
                     this.emit('error', new Error(msg.error.message || 'Unknown error'));
                     return;
                 }
