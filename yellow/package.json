@@ -11,6 +11,8 @@
     "create-wallet": "tsx scripts/create-wallet.ts",
     "close-all": "tsx scripts/close-all.ts",
     "test:service": "tsx scripts/test-service.ts",
+    "test:app-session": "tsx scripts/test-app-session-music.ts",
+    "test:basic-channel": "tsx scripts/test-app-session-flow.ts",
     "relayer:withdraw": "tsx scripts/relayer-withdraw.ts"
   },
   "keywords": [],
