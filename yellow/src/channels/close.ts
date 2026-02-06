@@ -3,8 +3,34 @@ import type { PublicClient, Address, Hash } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
 import type { CloseChannelResponse } from '../types';
-import { TIMING } from '../config';
+import { TIMING, formatUSDCDisplay } from '../config';
 import { getUserCustodyBalance } from './create';
+
+// ============================================================================
+// Channel State Helpers
+// ============================================================================
+
+/**
+ * Get on-chain channel state for debugging
+ */
+export async function logOnChainChannelState(
+    client: NitroliteClient,
+    channelId: `0x${string}`
+): Promise<void> {
+    try {
+        const data = await client.getChannelData(channelId);
+        console.log('  On-chain channel state:');
+        console.log(`    Status: ${data.status}`);
+        console.log(`    Challenge expiry: ${data.challengeExpiry}`);
+        console.log(`    Last valid state version: ${data.lastValidState.version}`);
+        console.log(`    Allocations:`);
+        for (const alloc of data.lastValidState.allocations) {
+            console.log(`      ${alloc.destination.slice(0, 10)}...: ${formatUSDCDisplay(alloc.amount)}`);
+        }
+    } catch (err) {
+        console.log(`  Could not get on-chain channel state: ${err}`);
+    }
+}
 
 // ============================================================================
 // Close Channel
@@ -75,18 +101,18 @@ export function waitForCloseConfirmation(
 
 /**
  * Submit close to blockchain
- *
- * Note: We don't verify the receipt here because the Nitrolite SDK
- * sometimes has gas estimation issues that cause the receipt check to fail
- * even when the close actually succeeds. The caller should verify the
- * channel is closed by other means if needed.
  */
 export async function submitCloseToBlockchain(
     client: NitroliteClient,
-    _publicClient: PublicClient, // kept for API compatibility
+    publicClient: PublicClient,
     response: CloseChannelResponse
 ): Promise<Hash> {
     const { channel_id, state, server_signature } = response;
+
+    console.log('  Submitting close to blockchain...');
+    console.log(`    Channel ID: ${channel_id}`);
+    console.log(`    State version: ${state.version}`);
+    console.log(`    Allocations count: ${state.allocations.length}`);
 
     const txHash = await client.closeChannel({
         finalState: {
@@ -104,9 +130,23 @@ export async function submitCloseToBlockchain(
         stateData: state.state_data || state.data || '0x',
     });
 
-    // Wait briefly for the transaction to be included
-    // Don't verify receipt status due to SDK gas estimation issues
-    await new Promise(r => setTimeout(r, 3000));
+    console.log(`    TX Hash: ${txHash}`);
+
+    // Wait for transaction and verify receipt
+    try {
+        const receipt = await publicClient.waitForTransactionReceipt({
+            hash: txHash as Hash,
+            timeout: 60_000,
+        });
+
+        if (receipt.status === 'success') {
+            console.log('    ✓ Close transaction succeeded');
+        } else {
+            console.log('    ✗ Close transaction REVERTED');
+        }
+    } catch (err) {
+        console.log(`    ⚠ Could not verify receipt: ${err}`);
+    }
 
     return txHash as Hash;
 }
