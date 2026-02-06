@@ -95,9 +95,10 @@ async function main() {
 
         // Step 3: Start session
         console.log('\n[Step 3] Starting listening session...');
-        // Use a small deposit amount (user has limited test tokens)
-        // 200 units = 0.0002 USDC (with 6 decimals)
-        const depositAmount = 200n;
+        // Use a small deposit amount that user can afford
+        // 50 units = 0.00005 USDC (with 6 decimals)
+        // This allows 0.5 seconds of playback at 100 units/sec
+        const depositAmount = 50n;
         await service.startSession(depositAmount);
 
         // Step 4: Simulate playing a song

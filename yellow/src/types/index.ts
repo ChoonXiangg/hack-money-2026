@@ -133,6 +133,42 @@ export interface CloseChannelResponse {
 }
 
 // ============================================================================
+// App Session Types (for 2-party sessions with explicit fund distribution)
+// ============================================================================
+
+export interface AppSessionAllocation {
+    participant: Address;
+    asset: string;
+    amount: string;
+}
+
+export interface AppSessionDefinition {
+    application: string;
+    protocol: 'NitroRPC/0.2' | 'NitroRPC/0.4';
+    participants: Address[];
+    weights: number[];
+    quorum: number;
+    challenge: number;
+    nonce?: number;
+}
+
+export interface CreateAppSessionResponse {
+    app_session_id: `0x${string}`;
+    definition: AppSessionDefinition;
+    allocations: AppSessionAllocation[];
+    session_data?: string;
+}
+
+export interface CloseAppSessionResponse {
+    app_session_id: `0x${string}`;
+    allocations: AppSessionAllocation[];
+    final_state?: {
+        version: number;
+        allocations: AppSessionAllocation[];
+    };
+}
+
+// ============================================================================
 // Session Types
 // ============================================================================
 
