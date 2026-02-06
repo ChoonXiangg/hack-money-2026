@@ -95,7 +95,9 @@ async function main() {
 
         // Step 3: Start session
         console.log('\n[Step 3] Starting listening session...');
-        const depositAmount = 20_000_000n; // 20 USDC
+        // Use a small deposit amount (user has limited test tokens)
+        // 200 units = 0.0002 USDC (with 6 decimals)
+        const depositAmount = 200n;
         await service.startSession(depositAmount);
 
         // Step 4: Simulate playing a song
@@ -106,8 +108,8 @@ async function main() {
         console.log(`   Price: ${formatUSDCDisplay(song.pricePerSecond)}/second`);
         service.startPlay(song);
 
-        // Simulate 10 seconds of playback with live ticker
-        const playDuration = 10;
+        // Simulate 1 second of playback (deposit is 200 units, price is 100/sec)
+        const playDuration = 1;
         for (let i = 1; i <= playDuration; i++) {
             await sleep(1000);
             const state = service.getSessionState();
@@ -128,11 +130,11 @@ async function main() {
         console.log(`  Total spent: ${formatUSDCDisplay(sessionState.totalSpent)}`);
         console.log(`  Remaining balance: ${formatUSDCDisplay(sessionState.currentBalance)}`);
 
-        // Step 5: End session and transfer to relayer
+        // Step 5: End session - close, withdraw, transfer to relayer
         console.log('\n[Step 5] Ending session...');
-        console.log('  - Transferring spent amount to relayer (off-chain Yellow ledger)');
-        console.log('  - Closing Yellow channel and withdrawing remaining funds');
-        console.log('  - Relayer can then withdraw to get on-chain ERC20 tokens');
+        console.log('  - Closing channel (funds go to user custody)');
+        console.log('  - Withdrawing from custody');
+        console.log('  - Sending spent amount to relayer');
 
         const settlement = await service.endSession();
 
@@ -140,13 +142,23 @@ async function main() {
         console.log('SETTLEMENT COMPLETE');
         console.log('='.repeat(60));
         console.log(`  Channel Close TX: ${settlement.closeTxHash}`);
-        console.log(`  User Refund: ${formatUSDCDisplay(settlement.refundAmount)}`);
+        if (settlement.withdrawTxHash) {
+            console.log(`  Withdraw TX: ${settlement.withdrawTxHash}`);
+        }
+
+        if (settlement.sessionInfo) {
+            console.log('\n  Session Summary:');
+            console.log(`    User: ${settlement.sessionInfo.userAddress}`);
+            console.log(`    Total Deposited: ${formatUSDCDisplay(settlement.sessionInfo.depositAmount)}`);
+            console.log(`    Total Spent: ${formatUSDCDisplay(settlement.sessionInfo.totalSpent)}`);
+            console.log(`    User Keeps (refund): ${formatUSDCDisplay(settlement.sessionInfo.refundDue)}`);
+        }
 
         if (settlement.relayerTransfer) {
-            console.log('\n  Relayer Transfer:');
+            console.log('\n  Relayer Payment:');
             console.log(`    To: ${settlement.relayerTransfer.destination}`);
             console.log(`    Amount: ${formatUSDCDisplay(settlement.relayerTransfer.amount)}`);
-            console.log(`    Success: ${settlement.relayerTransfer.success ? '✓' : '✗'}`);
+            console.log(`    Success: ${settlement.relayerTransfer.success}`);
         }
 
         if (settlement.transfers.length > 0) {

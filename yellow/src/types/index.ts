@@ -215,6 +215,13 @@ export interface SettlementResult {
     withdrawTxHash: Hash | null;
     /** On-chain transfer to relayer for cross-chain artist payments */
     relayerTransfer?: TransferResult | null;
+    /** Session info for relayer to process refunds */
+    sessionInfo?: {
+        userAddress: Address;
+        depositAmount: bigint;
+        totalSpent: bigint;
+        refundDue: bigint;
+    };
 }
 
 // ============================================================================
