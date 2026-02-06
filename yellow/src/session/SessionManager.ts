@@ -1,6 +1,6 @@
 import type { Address } from 'viem';
-import type { PlayEvent, SessionState, SessionSummary, Song } from '../types';
-import { DEFAULT_PRICE_PER_SECOND } from '../config';
+import type { PlayEvent, SessionState, SessionSummary, Song, ListeningActivity } from '../types';
+import { DEFAULT_PRICE_PER_SECOND, parseUSDC } from '../config';
 
 // ============================================================================
 // Session Manager
@@ -8,12 +8,14 @@ import { DEFAULT_PRICE_PER_SECOND } from '../config';
 
 /**
  * Manages the state of a listening session
- * Tracks play events, calculates costs, and aggregates artist totals
+ * Tracks play events, calculates costs, and aggregates song totals
  */
 export class SessionManager {
     private state: SessionState;
     private currentPlay: PlayEvent | null = null;
     private playInterval: NodeJS.Timeout | null = null;
+    /** Track total spent per songId - key data for relayer payouts */
+    private songTotals: Map<string, bigint> = new Map();
 
     constructor() {
         this.state = this.createInitialState();
@@ -34,7 +36,7 @@ export class SessionManager {
             currentBalance: 0n,
             totalSpent: 0n,
             playHistory: [],
-            artistTotals: new Map(),
+            artistTotals: new Map(), // Keep for backwards compat
         };
     }
 
@@ -58,6 +60,7 @@ export class SessionManager {
             depositAmount,
             currentBalance: depositAmount,
         };
+        this.songTotals = new Map();
     }
 
     /**
@@ -84,6 +87,7 @@ export class SessionManager {
             this.playInterval = null;
         }
         this.currentPlay = null;
+        this.songTotals = new Map();
         this.state = this.createInitialState();
     }
 
@@ -93,18 +97,22 @@ export class SessionManager {
 
     /**
      * Start playing a song
+     * Accepts the new Song type from songs.json
      */
     startPlay(song: Song): void {
-        // Stop current play if any
+        // Stop current play if any (this triggers microtransaction recording)
         if (this.currentPlay) {
             this.stopCurrentPlay();
         }
 
-        const pricePerSecond = song.pricePerSecond || DEFAULT_PRICE_PER_SECOND;
+        // Convert pricePerSecond from string to bigint
+        const pricePerSecond = song.pricePerSecond
+            ? parseUSDC(song.pricePerSecond)
+            : DEFAULT_PRICE_PER_SECOND;
 
         this.currentPlay = {
             songId: song.id,
-            artistAddress: song.artist.walletAddress,
+            artistAddress: '0x0000000000000000000000000000000000000000' as Address, // Not used - tracking by songId
             startTime: Date.now(),
             endTime: null,
             durationSeconds: 0,
@@ -134,6 +142,7 @@ export class SessionManager {
 
     /**
      * Stop the current play and record it
+     * This is when the "microtransaction" is recorded
      */
     stopCurrentPlay(): PlayEvent | null {
         if (!this.currentPlay) {
@@ -150,11 +159,11 @@ export class SessionManager {
         const completedPlay = { ...this.currentPlay };
         this.state.playHistory.push(completedPlay);
 
-        // Update artist totals
-        const currentTotal = this.state.artistTotals.get(completedPlay.artistAddress) || 0n;
-        this.state.artistTotals.set(
-            completedPlay.artistAddress,
-            currentTotal + completedPlay.totalCost
+        // Update song totals (aggregate by songId)
+        const currentSongTotal = this.songTotals.get(completedPlay.songId) || 0n;
+        this.songTotals.set(
+            completedPlay.songId,
+            currentSongTotal + completedPlay.totalCost
         );
 
         // Update session totals
@@ -173,7 +182,6 @@ export class SessionManager {
      */
     recordPlay(
         songId: string,
-        artistAddress: Address,
         durationSeconds: number,
         pricePerSecond: bigint
     ): PlayEvent {
@@ -182,7 +190,7 @@ export class SessionManager {
 
         const playEvent: PlayEvent = {
             songId,
-            artistAddress,
+            artistAddress: '0x0000000000000000000000000000000000000000' as Address,
             startTime: now - durationSeconds * 1000,
             endTime: now,
             durationSeconds,
@@ -193,9 +201,9 @@ export class SessionManager {
         // Add to history
         this.state.playHistory.push(playEvent);
 
-        // Update artist totals
-        const currentTotal = this.state.artistTotals.get(artistAddress) || 0n;
-        this.state.artistTotals.set(artistAddress, currentTotal + totalCost);
+        // Update song totals
+        const currentSongTotal = this.songTotals.get(songId) || 0n;
+        this.songTotals.set(songId, currentSongTotal + totalCost);
 
         // Update session totals
         this.state.totalSpent += totalCost;
@@ -276,22 +284,29 @@ export class SessionManager {
     }
 
     /**
-     * Get artist totals (for settlement)
+     * Get song totals (for settlement) - aggregated by songId
      */
-    getArtistTotals(): Map<Address, bigint> {
+    getSongTotals(): Map<string, bigint> {
         // Create a copy including current play
-        const totals = new Map(this.state.artistTotals);
+        const totals = new Map(this.songTotals);
 
         if (this.currentPlay) {
             this.updateCurrentPlay();
-            const currentTotal = totals.get(this.currentPlay.artistAddress) || 0n;
+            const currentTotal = totals.get(this.currentPlay.songId) || 0n;
             totals.set(
-                this.currentPlay.artistAddress,
+                this.currentPlay.songId,
                 currentTotal + this.currentPlay.totalCost
             );
         }
 
         return totals;
+    }
+
+    /**
+     * Get artist totals (legacy - kept for backwards compatibility)
+     */
+    getArtistTotals(): Map<Address, bigint> {
+        return new Map(this.state.artistTotals);
     }
 
     /**
@@ -313,6 +328,36 @@ export class SessionManager {
     }
 
     // ========================================================================
+    // Listening Activity (for Relayer)
+    // ========================================================================
+
+    /**
+     * Generate ListeningActivity array for relayer payouts
+     * Simple structure: array of { songListened, amountSpent }
+     *
+     * Example:
+     * [
+     *   { songListened: "song-123", amountSpent: 500n },
+     *   { songListened: "song-456", amountSpent: 300n },
+     * ]
+     */
+    getListeningActivity(): ListeningActivity {
+        const songTotals = this.getSongTotals();
+        const activity: ListeningActivity = [];
+
+        for (const [songId, amountSpent] of songTotals) {
+            if (amountSpent > 0n) {
+                activity.push({
+                    songListened: songId,
+                    amountSpent,
+                });
+            }
+        }
+
+        return activity;
+    }
+
+    // ========================================================================
     // Summary Generation
     // ========================================================================
 
@@ -321,8 +366,9 @@ export class SessionManager {
      */
     generateSummary(): SessionSummary {
         const artistPayments: Array<{ artistAddress: Address; amount: bigint }> = [];
-        const artistTotals = this.getArtistTotals();
 
+        // For backwards compat, we still generate artistPayments but it may be empty
+        const artistTotals = this.getArtistTotals();
         for (const [address, amount] of artistTotals) {
             if (amount > 0n) {
                 artistPayments.push({ artistAddress: address, amount });

@@ -10,6 +10,7 @@ import type {
     PlayEvent,
     TransferResult,
     SettlementResult,
+    ListeningActivity,
 } from './types';
 
 import {
@@ -42,7 +43,7 @@ import { fundChannel } from './channels/resize';
 import { sendCloseChannelRequest, waitForCloseConfirmation, submitCloseToBlockchain, withdrawFromCustody, logOnChainChannelState } from './channels/close';
 import { transferToRelayer, getTokenBalance } from './channels/relayer';
 import { getUserCustodyBalance, getChannelBalance } from './channels/create';
-import { startAppSession, endAppSession } from './channels/appSession';
+import { startAppSession, endAppSession, submitAppState } from './channels/appSession';
 import { formatUSDCDisplay, RELAYER_ADDRESS, CONTRACT_ADDRESSES, DEFAULT_TOKEN_ADDRESS } from './config';
 
 import { SessionManager } from './session/SessionManager';
@@ -78,12 +79,15 @@ export class YellowService extends EventEmitter {
     private messageHandlers: Map<string, (data: unknown) => void> = new Map();
     /** App Session ID when using App Sessions mode */
     private appSessionId: `0x${string}` | null = null;
+    /** App Session version for state updates (microtransactions) */
+    private appSessionVersion: number = 1;
 
     constructor(config: YellowServiceConfig) {
         super();
         this.config = {
             ...config,
-            // Default to basic channels - App Sessions not yet supported in ClearNode sandbox
+            // Default to basic channels - App Sessions require both parties to be active signers
+            // Relayer is passive, so we use ERC20 transfer instead
             useAppSessions: config.useAppSessions ?? false,
             relayerAddress: config.relayerAddress ?? RELAYER_ADDRESS,
         };
@@ -313,6 +317,7 @@ export class YellowService extends EventEmitter {
         });
 
         this.appSessionId = appSessionId;
+        this.appSessionVersion = 1; // Reset version for new session
 
         if (depositTxHash) {
             console.log(`  Deposit TX: ${depositTxHash}`);
@@ -437,7 +442,9 @@ export class YellowService extends EventEmitter {
         const totalSpent = this.sessionManager.getTotalSpent();
         const depositAmount = this.sessionManager.getState().depositAmount;
         const refundAmount = depositAmount - totalSpent;
-        const artistTotals = this.sessionManager.getArtistTotals();
+
+        // Get listening activity BEFORE ending session (while data is still available)
+        const listeningActivity = this.sessionManager.getListeningActivity();
 
         console.log('\n' + '='.repeat(60));
         console.log('SESSION SETTLEMENT (App Sessions)');
@@ -452,9 +459,9 @@ export class YellowService extends EventEmitter {
         console.log(`    User refund: ${formatUSDCDisplay(refundAmount)}`);
         console.log(`    Relayer payment: ${formatUSDCDisplay(totalSpent)}`);
         console.log('');
-        console.log(`  Artists to pay (${artistTotals.size}):`);
-        for (const [address, amount] of artistTotals) {
-            console.log(`    - ${address.slice(0, 10)}...: ${formatUSDCDisplay(amount)}`);
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
         }
 
         // Check balances BEFORE close
@@ -495,17 +502,6 @@ export class YellowService extends EventEmitter {
 
         this.emit('channel:closed', this.appSessionId, result.userWithdrawTxHash || ('0x' as `0x${string}`));
 
-        // Build transfer results for artist reporting
-        const transfers: TransferResult[] = [];
-        for (const [address, amount] of artistTotals) {
-            transfers.push({
-                success: true,
-                destination: address,
-                amount,
-                timestamp: Date.now(),
-            });
-        }
-
         // Generate session summary
         const summary = this.sessionManager.endSession();
         this.emit('session:ended', summary);
@@ -513,6 +509,7 @@ export class YellowService extends EventEmitter {
         // Reset
         const appSessionId = this.appSessionId;
         this.appSessionId = null;
+        this.appSessionVersion = 1;
         this.sessionManager.reset();
 
         console.log('\n' + '='.repeat(60));
@@ -522,12 +519,17 @@ export class YellowService extends EventEmitter {
         console.log(`  Relayer received: ${formatUSDCDisplay(totalSpent)} (in custody, ready to withdraw)`);
         console.log(`  User custody: 0 (empty)`);
         console.log('');
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
+        }
+        console.log('');
         console.log('  All transactions on-chain and verifiable on Etherscan');
         console.log('='.repeat(60));
 
         return {
             success: true,
-            transfers,
+            transfers: [], // No longer tracking individual artist transfers here
             closeTxHash: appSessionId, // Use appSessionId as reference
             refundAmount,
             withdrawTxHash: result.userWithdrawTxHash || null,
@@ -543,6 +545,7 @@ export class YellowService extends EventEmitter {
                 totalSpent,
                 refundDue: refundAmount,
             },
+            listeningActivity, // Key data for relayer to distribute to artists
         };
     }
 
@@ -563,8 +566,10 @@ export class YellowService extends EventEmitter {
         const totalSpent = this.sessionManager.getTotalSpent();
         const depositAmount = this.sessionManager.getState().depositAmount;
         const refundAmount = depositAmount - totalSpent;
-        const artistTotals = this.sessionManager.getArtistTotals();
         const userAddress = this.clients.account.address;
+
+        // Get listening activity BEFORE ending session (while data is still available)
+        const listeningActivity = this.sessionManager.getListeningActivity();
 
         console.log('\n[Session Settlement - Basic Channel Mode]');
         console.log(`  User: ${userAddress}`);
@@ -572,9 +577,9 @@ export class YellowService extends EventEmitter {
         console.log(`  Total spent: ${formatUSDCDisplay(totalSpent)}`);
         console.log(`  Refund (user keeps): ${formatUSDCDisplay(refundAmount)}`);
         console.log(`  Payment to relayer: ${formatUSDCDisplay(totalSpent)}`);
-        console.log(`  Artists to pay: ${artistTotals.size}`);
-        for (const [address, amount] of artistTotals) {
-            console.log(`    - ${address}: ${formatUSDCDisplay(amount)}`);
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
         }
 
         // Step 1: Close channel with funds going to USER
@@ -729,17 +734,6 @@ export class YellowService extends EventEmitter {
             console.log('\n[Step 3] No payment needed (nothing spent)');
         }
 
-        // Build transfer results (for reporting artist distributions)
-        const transfers: TransferResult[] = [];
-        for (const [address, amount] of artistTotals) {
-            transfers.push({
-                success: true,
-                destination: address,
-                amount,
-                timestamp: Date.now(),
-            });
-        }
-
         // Generate session summary
         const summary = this.sessionManager.endSession();
         this.emit('session:ended', summary);
@@ -750,11 +744,15 @@ export class YellowService extends EventEmitter {
         console.log('\n[Settlement Complete]');
         console.log(`  User keeps: ${formatUSDCDisplay(refundAmount)}`);
         console.log(`  Relayer received: ${formatUSDCDisplay(totalSpent)}`);
-        console.log(`  Relayer will distribute to ${artistTotals.size} artists`);
+        console.log('');
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
+        }
 
         return {
             success: true,
-            transfers,
+            transfers: [], // No longer tracking individual artist transfers
             closeTxHash,
             refundAmount,
             withdrawTxHash,
@@ -765,6 +763,7 @@ export class YellowService extends EventEmitter {
                 totalSpent,
                 refundDue: refundAmount,
             },
+            listeningActivity, // Key data for relayer to distribute to artists
         };
     }
 
@@ -793,10 +792,19 @@ export class YellowService extends EventEmitter {
 
     /**
      * Start playing a song
+     * If there's a current play, this triggers an off-chain microtransaction
+     * to record payment for the previous song before starting the new one
      */
-    startPlay(song: Song): void {
+    async startPlay(song: Song): Promise<void> {
         if (!this.sessionManager.isActive()) {
             throw new Error('No active session');
+        }
+
+        // Check if there's a current play (user is switching songs)
+        const currentPlay = this.sessionManager.getCurrentPlay();
+        if (currentPlay && currentPlay.totalCost > 0n) {
+            // Submit off-chain microtransaction for the previous song
+            await this.submitMicrotransaction();
         }
 
         this.sessionManager.startPlay(song);
@@ -804,12 +812,82 @@ export class YellowService extends EventEmitter {
     }
 
     /**
-     * Stop the current play
+     * Stop the current play and optionally submit microtransaction
      */
-    stopPlay(): PlayEvent | null {
+    async stopPlay(): Promise<PlayEvent | null> {
+        const currentPlay = this.sessionManager.getCurrentPlay();
+
+        // Submit microtransaction before stopping if there's cost
+        if (currentPlay && currentPlay.totalCost > 0n && this.config.useAppSessions && this.appSessionId) {
+            await this.submitMicrotransaction();
+        }
+
         const playEvent = this.sessionManager.stopCurrentPlay();
         this.emit('session:updated', this.sessionManager.getState());
         return playEvent;
+    }
+
+    /**
+     * Submit an off-chain microtransaction (state update)
+     * This is called when switching songs to record payment for the current song
+     */
+    private async submitMicrotransaction(): Promise<void> {
+        if (!this.config.useAppSessions || !this.appSessionId) {
+            return; // Only for App Sessions mode
+        }
+
+        if (!this.ws || !this.sessionKeyPair || !this.clients) {
+            return;
+        }
+
+        const currentPlay = this.sessionManager.getCurrentPlay();
+        if (!currentPlay || currentPlay.totalCost === 0n) {
+            return;
+        }
+
+        // Stop current play to finalize cost calculation
+        this.sessionManager.stopCurrentPlay();
+
+        // Get current totals
+        const totalSpent = this.sessionManager.getTotalSpent();
+        const depositAmount = this.sessionManager.getState().depositAmount;
+        const userBalance = depositAmount - totalSpent;
+        const relayerBalance = totalSpent;
+
+        const userAddress = this.clients.account.address;
+        const relayerAddress = this.config.relayerAddress!;
+
+        // Increment version and submit state update
+        this.appSessionVersion++;
+
+        console.log(`\n  [Song Switch - Microtransaction v${this.appSessionVersion}]`);
+        console.log(`    Song: ${currentPlay.songId}`);
+        console.log(`    Cost: ${formatUSDCDisplay(currentPlay.totalCost)}`);
+        console.log(`    User balance: ${formatUSDCDisplay(userBalance)}`);
+        console.log(`    Relayer balance: ${formatUSDCDisplay(relayerBalance)}`);
+
+        try {
+            await submitAppState({
+                ws: this.ws,
+                sessionKeyPair: this.sessionKeyPair,
+                appSessionId: this.appSessionId,
+                userAddress,
+                relayerAddress,
+                userBalance,
+                relayerBalance,
+                version: this.appSessionVersion,
+            });
+
+            this.emit('transfer:completed', {
+                success: true,
+                destination: relayerAddress,
+                amount: currentPlay.totalCost,
+                timestamp: Date.now(),
+            });
+        } catch (err) {
+            console.log(`    ⚠ Microtransaction failed (continuing with local tracking): ${err}`);
+            // Continue anyway - the local state is still accurate
+        }
     }
 
     /**
@@ -817,7 +895,6 @@ export class YellowService extends EventEmitter {
      */
     recordPlay(
         songId: string,
-        artistAddress: Address,
         durationSeconds: number,
         pricePerSecond: bigint
     ): PlayEvent {
@@ -827,7 +904,6 @@ export class YellowService extends EventEmitter {
 
         const playEvent = this.sessionManager.recordPlay(
             songId,
-            artistAddress,
             durationSeconds,
             pricePerSecond
         );

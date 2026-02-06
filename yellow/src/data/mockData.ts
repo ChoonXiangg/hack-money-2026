@@ -1,5 +1,7 @@
-import type { Artist, Song } from '../types';
-import { DEFAULT_PRICE_PER_SECOND } from '../config';
+import type { Artist, LegacySong, Song } from '../types';
+import { DEFAULT_PRICE_PER_SECOND, formatUSDC } from '../config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * IMPORTANT: These are REAL wallet addresses generated for testing purposes.
@@ -45,10 +47,10 @@ export const SAMPLE_ARTISTS: Artist[] = [
 ];
 
 /**
- * Sample songs with mock metadata
+ * Sample songs with mock metadata (Legacy format)
  * Song metadata is for demo purposes, but artist wallets are real
  */
-export const SAMPLE_SONGS: Song[] = [
+export const SAMPLE_LEGACY_SONGS: LegacySong[] = [
     // Synthwave Dreams songs
     {
         id: 'song-001',
@@ -64,67 +66,63 @@ export const SAMPLE_SONGS: Song[] = [
         durationSeconds: 195, // 3:15
         pricePerSecond: DEFAULT_PRICE_PER_SECOND,
     },
-    // Crypto Beats songs
+];
+
+/**
+ * Sample songs matching the new Song type from songs.json
+ */
+export const SAMPLE_SONGS: Song[] = [
+    {
+        id: 'song-001',
+        songName: 'Digital Sunrise',
+        pricePerSecond: '0.0001',
+        collaborators: [
+            {
+                artistName: 'Synthwave Dreams',
+                address: '0x742d35Cc6634C0532925a3b844Bc9e7595f5bE91',
+                blockchain: 'Ethereum_Sepolia',
+            },
+        ],
+    },
+    {
+        id: 'song-002',
+        songName: 'Neon Nights',
+        pricePerSecond: '0.0001',
+        collaborators: [
+            {
+                artistName: 'Synthwave Dreams',
+                address: '0x742d35Cc6634C0532925a3b844Bc9e7595f5bE91',
+                blockchain: 'Ethereum_Sepolia',
+            },
+        ],
+    },
     {
         id: 'song-003',
-        title: 'Token of Love',
-        artist: SAMPLE_ARTISTS[1],
-        durationSeconds: 210, // 3:30
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    {
-        id: 'song-004',
-        title: 'Hash Rate Hustle',
-        artist: SAMPLE_ARTISTS[1],
-        durationSeconds: 180, // 3:00
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    // Blockchain Ballads songs
-    {
-        id: 'song-005',
-        title: 'Consensus Mechanism',
-        artist: SAMPLE_ARTISTS[2],
-        durationSeconds: 312, // 5:12
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    {
-        id: 'song-006',
-        title: 'Proof of Work',
-        artist: SAMPLE_ARTISTS[2],
-        durationSeconds: 267, // 4:27
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    // DeFi Disco songs
-    {
-        id: 'song-007',
-        title: 'Yield Farming Blues',
-        artist: SAMPLE_ARTISTS[3],
-        durationSeconds: 223, // 3:43
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    {
-        id: 'song-008',
-        title: 'Liquidity Pool Party',
-        artist: SAMPLE_ARTISTS[3],
-        durationSeconds: 198, // 3:18
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    // NFT Melodies songs
-    {
-        id: 'song-009',
-        title: 'Mint My Heart',
-        artist: SAMPLE_ARTISTS[4],
-        durationSeconds: 245, // 4:05
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
-    },
-    {
-        id: 'song-010',
-        title: 'Floor Price Feelings',
-        artist: SAMPLE_ARTISTS[4],
-        durationSeconds: 189, // 3:09
-        pricePerSecond: DEFAULT_PRICE_PER_SECOND,
+        songName: 'Token of Love',
+        pricePerSecond: '0.0002',
+        collaborators: [
+            {
+                artistName: 'Crypto Beats',
+                address: '0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199',
+                blockchain: 'Ethereum_Sepolia',
+            },
+        ],
     },
 ];
+
+/**
+ * Load songs from songs.json file
+ */
+export function loadSongsFromFile(filePath?: string): Song[] {
+    const songsPath = filePath || path.resolve(__dirname, '../../../../data/songs.json');
+    try {
+        const data = fs.readFileSync(songsPath, 'utf-8');
+        return JSON.parse(data) as Song[];
+    } catch (error) {
+        console.warn(`Could not load songs from ${songsPath}, using sample songs`);
+        return SAMPLE_SONGS;
+    }
+}
 
 /**
  * Get a song by ID
@@ -138,13 +136,6 @@ export function getSongById(id: string): Song | undefined {
  */
 export function getArtistById(id: string): Artist | undefined {
     return SAMPLE_ARTISTS.find(artist => artist.id === id);
-}
-
-/**
- * Get all songs by a specific artist
- */
-export function getSongsByArtist(artistId: string): Song[] {
-    return SAMPLE_SONGS.filter(song => song.artist.id === artistId);
 }
 
 /**
@@ -174,14 +165,13 @@ export function createArtist(
 }
 
 /**
- * Create a custom song
+ * Create a custom song (new format)
  */
 export function createSong(
     id: string,
-    title: string,
-    artist: Artist,
-    durationSeconds: number,
-    pricePerSecond: bigint = DEFAULT_PRICE_PER_SECOND
+    songName: string,
+    pricePerSecond: string,
+    collaborators: Song['collaborators']
 ): Song {
-    return { id, title, artist, durationSeconds, pricePerSecond };
+    return { id, songName, pricePerSecond, collaborators };
 }

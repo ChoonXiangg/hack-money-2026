@@ -1,8 +1,10 @@
 import {
     createAppSessionMessage,
     createCloseAppSessionMessage,
+    createSubmitAppStateMessage,
     NitroliteClient,
     RPCProtocolVersion,
+    RPCAppStateIntent,
 } from '@erc7824/nitrolite';
 import type { PublicClient, Address, Hash } from 'viem';
 import WebSocket from 'ws';
@@ -47,6 +49,9 @@ export async function createAppSession(
     console.log(`    User deposit: ${formatUSDCDisplay(depositAmount)}`);
 
     // Create app session message
+    // IMPORTANT: Use weights [100, 0] and quorum 100 for single-signer mode
+    // This allows the user to sign state updates without needing relayer's signature
+    // The relayer is passive and doesn't need to actively sign
     const appSessionMsg = await createAppSessionMessage(
         sessionKeyPair.signer,
         {
@@ -54,9 +59,10 @@ export async function createAppSession(
                 application: SESSION_CONFIG.applicationName,
                 protocol: RPCProtocolVersion.NitroRPC_0_4,
                 participants: [userAddress, relayerAddress],
-                weights: [1, 1],
-                quorum: 2,
-                challenge: Number(SESSION_CONFIG.challengeDuration),
+                weights: [100, 0],  // User has full weight, relayer has none
+                quorum: 100,        // Only user's signature needed
+                challenge: 0,       // No challenge period for instant updates
+                nonce: Date.now(),  // Unique nonce for this session
             },
             allocations: [
                 {
@@ -106,6 +112,137 @@ function waitForAppSessionCreation(
                     clearTimeout(timeout);
                     ws.off('message', handler);
                     reject(new Error(msg.error.message || 'Create App Session error'));
+                }
+            } catch (err) {
+                // Ignore parse errors
+            }
+        };
+
+        ws.on('message', handler);
+    });
+}
+
+// ============================================================================
+// App Session State Updates (Off-chain Microtransactions)
+// ============================================================================
+
+export interface SubmitAppStateParams {
+    ws: WebSocket;
+    sessionKeyPair: SessionKeyPair;
+    appSessionId: `0x${string}`;
+    userAddress: Address;
+    relayerAddress: Address;
+    userBalance: bigint;
+    relayerBalance: bigint;
+    version: number;
+    tokenSymbol?: string;
+}
+
+export interface AppStateUpdateResult {
+    success: boolean;
+    version: number;
+    userBalance: bigint;
+    relayerBalance: bigint;
+}
+
+/**
+ * Submit an app state update (off-chain microtransaction)
+ * Used when user switches songs to record the payment for the previous song
+ * This is instant and off-chain - no gas needed!
+ */
+export async function submitAppState(
+    params: SubmitAppStateParams
+): Promise<AppStateUpdateResult> {
+    const {
+        ws,
+        sessionKeyPair,
+        appSessionId,
+        userAddress,
+        relayerAddress,
+        userBalance,
+        relayerBalance,
+        version,
+        tokenSymbol = 'ytest.usd',
+    } = params;
+
+    console.log(`  [Microtransaction] State update v${version}`);
+    console.log(`    User balance: ${formatUSDCDisplay(userBalance)}`);
+    console.log(`    Relayer balance: ${formatUSDCDisplay(relayerBalance)}`);
+
+    // Create submit app state message
+    const stateMsg = await createSubmitAppStateMessage(
+        sessionKeyPair.signer,
+        {
+            app_session_id: appSessionId,
+            allocations: [
+                {
+                    participant: userAddress,
+                    asset: tokenSymbol,
+                    amount: userBalance.toString(),
+                },
+                {
+                    participant: relayerAddress,
+                    asset: tokenSymbol,
+                    amount: relayerBalance.toString(),
+                },
+            ],
+            intent: RPCAppStateIntent.Operate,
+            version: version,
+        }
+    );
+
+    ws.send(stateMsg);
+
+    return waitForAppStateUpdate(ws, appSessionId, version);
+}
+
+/**
+ * Wait for app state update confirmation
+ */
+function waitForAppStateUpdate(
+    ws: WebSocket,
+    appSessionId: `0x${string}`,
+    expectedVersion: number,
+    timeoutMs: number = TIMING.wsMessageTimeout
+): Promise<AppStateUpdateResult> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            ws.off('message', handler);
+            // Don't reject on timeout - state updates may be silent
+            resolve({
+                success: true,
+                version: expectedVersion,
+                userBalance: 0n,
+                relayerBalance: 0n,
+            });
+        }, 5000); // Short timeout for state updates
+
+        const handler = (data: WebSocket.Data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                if (msg.res && msg.res[1] === 'submit_app_state') {
+                    const payload = msg.res[2];
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    console.log(`  ✓ State update confirmed (v${payload?.version || expectedVersion})`);
+                    resolve({
+                        success: true,
+                        version: payload?.version || expectedVersion,
+                        userBalance: BigInt(payload?.allocations?.[0]?.amount || '0'),
+                        relayerBalance: BigInt(payload?.allocations?.[1]?.amount || '0'),
+                    });
+                }
+                if (msg.error) {
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    console.log(`  ⚠ State update error: ${msg.error.message}`);
+                    // Don't reject - continue with local tracking
+                    resolve({
+                        success: false,
+                        version: expectedVersion,
+                        userBalance: 0n,
+                        relayerBalance: 0n,
+                    });
                 }
             } catch (err) {
                 // Ignore parse errors
