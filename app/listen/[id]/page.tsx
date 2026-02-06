@@ -31,6 +31,7 @@ export default function ListenPage({
   const [secondsListened, setSecondsListened] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [isPaying, setIsPaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -92,17 +93,55 @@ export default function ListenPage({
     timerRef.current = null;
   };
 
-  const handleFinishAndPay = () => {
+  const handleFinishAndPay = async () => {
     if (audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    alert(
-      `Payment: ${total.toFixed(6)} USDC for ${secondsListened} seconds of "${song?.songName}"`
-    );
-    router.push("/");
+
+    if (secondsListened <= 0) {
+      alert("You haven't listened to any of the song yet!");
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      const res = await fetch("/api/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ songId: id, seconds: secondsListened }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(`Payment failed: ${data.error || "Unknown error"}`);
+        return;
+      }
+
+      const successCount = data.summary?.successful || 0;
+      const failCount = data.summary?.failed || 0;
+      const totalPaid = data.totalAmount || "0";
+
+      if (failCount > 0) {
+        alert(
+          `Partial payment: ${successCount} succeeded, ${failCount} failed.\nTotal: ${totalPaid} USDC for ${secondsListened}s of "${song?.songName}"`
+        );
+      } else {
+        alert(
+          `Payment successful! ${totalPaid} USDC paid for ${secondsListened}s of "${song?.songName}"`
+        );
+      }
+
+      router.push("/");
+    } catch (error) {
+      console.error("Payment error:", error);
+      alert("Payment failed. Please try again.");
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   const formatTime = (secs: number) => {
@@ -296,9 +335,10 @@ export default function ListenPage({
             {/* Finish and Pay Button */}
             <Button
               onClick={handleFinishAndPay}
-              className="mt-4 w-full bg-black px-12 py-6 font-[family-name:var(--font-climate)] text-xl text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-black hover:shadow-xl"
+              disabled={isPaying}
+              className="mt-4 w-full bg-black px-12 py-6 font-[family-name:var(--font-climate)] text-xl text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-black hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100"
             >
-              Finish and Pay
+              {isPaying ? "Paying..." : "Finish and Pay"}
             </Button>
           </div>
         </div>
