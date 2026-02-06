@@ -31,7 +31,7 @@ export default function ConnectWallet() {
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-opacity hover:bg-black/90 font-[family-name:var(--font-climate)]"
+        className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl font-[family-name:var(--font-climate)]"
         style={{ borderRadius: "12px" }}
       >
         {truncated || "Connect Wallet"}
