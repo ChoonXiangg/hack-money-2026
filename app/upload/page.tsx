@@ -33,6 +33,7 @@ interface Collaborator {
   artistName: string;
   address: string;
   blockchain: string;
+  percentage: number;
 }
 
 export default function UploadPage() {
@@ -42,7 +43,7 @@ export default function UploadPage() {
   const [songName, setSongName] = useState("");
   const [pricePerSecond, setPricePerSecond] = useState("");
   const [collaborators, setCollaborators] = useState<Collaborator[]>([
-    { id: "1", artistName: "", address: "", blockchain: "Arc_Testnet" },
+    { id: "1", artistName: "", address: "", blockchain: "Arc_Testnet", percentage: 100 },
   ]);
   const [isDragging, setIsDragging] = useState(false);
   const [isImageDragging, setIsImageDragging] = useState(false);
@@ -127,6 +128,8 @@ export default function UploadPage() {
     imageInputRef.current?.click();
   };
 
+  const totalPercentage = collaborators.reduce((sum, c) => sum + c.percentage, 0);
+
   const addCollaborator = () => {
     setCollaborators([
       ...collaborators,
@@ -135,6 +138,7 @@ export default function UploadPage() {
         artistName: "",
         address: "",
         blockchain: "Arc_Testnet",
+        percentage: 0,
       },
     ]);
   };
@@ -148,7 +152,7 @@ export default function UploadPage() {
   const updateCollaborator = (
     id: string,
     field: keyof Omit<Collaborator, "id">,
-    value: string
+    value: string | number
   ) => {
     setCollaborators(
       collaborators.map((c) => (c.id === id ? { ...c, [field]: value } : c))
@@ -160,6 +164,11 @@ export default function UploadPage() {
 
     if (!songFile || !songName || !pricePerSecond) {
       alert("Please fill in all required fields");
+      return;
+    }
+
+    if (totalPercentage !== 100) {
+      alert(`Collaborator percentages must add up to 100%. Currently: ${totalPercentage}%`);
       return;
     }
 
@@ -175,10 +184,11 @@ export default function UploadPage() {
       formData.append("songName", songName);
       formData.append("pricePerSecond", pricePerSecond);
       formData.append("collaborators", JSON.stringify(
-        collaborators.map(({ artistName, address, blockchain }) => ({
+        collaborators.map(({ artistName, address, blockchain, percentage }) => ({
           artistName,
           address,
           blockchain,
+          percentage,
         }))
       ));
 
@@ -201,7 +211,7 @@ export default function UploadPage() {
       setImagePreview(null);
       setSongName("");
       setPricePerSecond("");
-      setCollaborators([{ id: "1", artistName: "", address: "", blockchain: "Arc_Testnet" }]);
+      setCollaborators([{ id: "1", artistName: "", address: "", blockchain: "Arc_Testnet", percentage: 100 }]);
     } catch (error) {
       console.error("Upload error:", error);
       setUploadStatus("error");
@@ -454,30 +464,59 @@ export default function UploadPage() {
                       />
                     </div>
 
-                    {/* Blockchain */}
-                    <div className="space-y-1">
-                      <Label className="text-xs text-black/70">Blockchain</Label>
-                      <Select
-                        value={collaborator.blockchain}
-                        onValueChange={(value) =>
-                          updateCollaborator(collaborator.id, "blockchain", value)
-                        }
-                      >
-                        <SelectTrigger className="w-full border-black/20 bg-black/5 text-black focus:border-black/50 [&>svg]:text-black/70">
-                          <SelectValue placeholder="Select blockchain" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SUPPORTED_TESTNETS.map((chain) => (
-                            <SelectItem key={chain.id} value={chain.id}>
-                              {chain.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    {/* Percentage and Blockchain row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Percentage */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-black/70">Percentage (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="50"
+                          value={collaborator.percentage || ""}
+                          onChange={(e) =>
+                            updateCollaborator(
+                              collaborator.id,
+                              "percentage",
+                              Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
+                            )
+                          }
+                          className="border-black/20 bg-black/5 text-black placeholder:text-black/40 focus:border-black/50"
+                        />
+                      </div>
+
+                      {/* Blockchain */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-black/70">Blockchain</Label>
+                        <Select
+                          value={collaborator.blockchain}
+                          onValueChange={(value) =>
+                            updateCollaborator(collaborator.id, "blockchain", value)
+                          }
+                        >
+                          <SelectTrigger className="w-full border-black/20 bg-black/5 text-black focus:border-black/50 [&>svg]:text-black/70">
+                            <SelectValue placeholder="Select blockchain" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SUPPORTED_TESTNETS.map((chain) => (
+                              <SelectItem key={chain.id} value={chain.id}>
+                                {chain.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Total Percentage */}
+            <div className={`text-right text-sm font-medium ${totalPercentage === 100 ? "text-black/70" : "text-red-600"}`}>
+              Total: {totalPercentage}% {totalPercentage !== 100 && "(must be 100%)"}
             </div>
           </div>
 

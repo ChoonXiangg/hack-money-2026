@@ -10,6 +10,7 @@ interface Collaborator {
   artistName: string;
   address: string;
   blockchain: string;
+  percentage: number;
 }
 
 interface SongData {

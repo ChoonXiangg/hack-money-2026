@@ -19,6 +19,7 @@ interface Collaborator {
   artistName: string;
   address: string;
   blockchain: string;
+  percentage?: number;
 }
 
 interface SongData {
@@ -93,16 +94,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Split equally among collaborators
-    const splitPercentage = 100 / collaborators.length;
+    // Use collaborator percentages, falling back to equal split for older songs
+    const hasPercentages = collaborators.some((c) => c.percentage != null);
+    const equalSplit = 100 / collaborators.length;
     const results = [];
 
     for (const collaborator of collaborators) {
-      const shareAmount = ((totalAmount * splitPercentage) / 100).toFixed(6);
+      const percentage = hasPercentages ? (collaborator.percentage ?? equalSplit) : equalSplit;
+      const shareAmount = ((totalAmount * percentage) / 100).toFixed(6);
       const chain = collaborator.blockchain || "Arc_Testnet";
 
       console.log(
-        `Paying ${shareAmount} USDC (${splitPercentage.toFixed(1)}%) to ${collaborator.artistName} (${collaborator.address}) on ${chain}`
+        `Paying ${shareAmount} USDC (${percentage.toFixed(1)}%) to ${collaborator.artistName} (${collaborator.address}) on ${chain}`
       );
 
       try {
@@ -139,7 +142,7 @@ export async function POST(request: NextRequest) {
           results.push({
             artistName: collaborator.artistName,
             address: collaborator.address,
-            percentage: splitPercentage,
+            percentage,
             amount: shareAmount,
             chain,
             bridged: true,
@@ -163,7 +166,7 @@ export async function POST(request: NextRequest) {
           results.push({
             artistName: collaborator.artistName,
             address: collaborator.address,
-            percentage: splitPercentage,
+            percentage,
             amount: shareAmount,
             chain,
             bridged: false,

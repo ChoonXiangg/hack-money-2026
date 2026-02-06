@@ -13,7 +13,7 @@ interface Song {
   id: string;
   songName: string;
   pricePerSecond: string;
-  collaborators: { artistName: string; address: string; blockchain: string }[];
+  collaborators: { artistName: string; address: string; blockchain: string; percentage?: number }[];
   songFile: string;
   imageFile: string;
   createdAt: string;
