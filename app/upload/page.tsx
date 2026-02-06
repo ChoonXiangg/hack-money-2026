@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { Upload, Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -239,8 +240,15 @@ export default function UploadPage() {
         />
       </div>
 
+      {/* Header */}
+      <div className="relative z-10 px-8 pt-6">
+        <Link href="/" className="font-[family-name:var(--font-climate)] text-2xl text-black transition-opacity hover:opacity-70">
+          LeStream
+        </Link>
+      </div>
+
       {/* Content */}
-      <div className="relative z-10 mx-auto max-w-2xl px-6 py-12">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 py-8">
         <h1 className="mb-8 text-center text-5xl text-black font-[family-name:var(--font-climate)]">
           Upload Song
         </h1>
@@ -297,7 +305,7 @@ export default function UploadPage() {
               onDragOver={handleImageDragOver}
               onDragLeave={handleImageDragLeave}
               onDrop={handleImageDrop}
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 backdrop-blur-sm transition-all ${
+              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 backdrop-blur-sm transition-all ${
                 isImageDragging
                   ? "border-black bg-black/15"
                   : "border-black/50 bg-black/5 hover:border-black hover:bg-black/10"
@@ -326,7 +334,7 @@ export default function UploadPage() {
                   Click to Upload or Drag and Drop
                 </p>
                 <p className="mt-1 text-sm text-black/70">
-                  Song Cover Image (PNG, JPG)
+                  PNG, JPEG (max 50MB)
                 </p>
               </>
             )}
@@ -489,7 +497,7 @@ export default function UploadPage() {
           <Button
             type="submit"
             disabled={isUploading}
-            className="w-full bg-black py-6 text-xl text-white shadow-lg hover:bg-black/90 font-[family-name:var(--font-climate)] disabled:opacity-50"
+            className="w-full bg-black py-6 text-xl text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-black hover:shadow-xl font-[family-name:var(--font-climate)] disabled:opacity-50"
           >
             {isUploading ? (
               <>

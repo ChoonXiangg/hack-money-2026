@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import TiltedCard from "@/components/TiltedCard";
 import ConnectWallet from "@/components/ConnectWallet";
@@ -102,34 +103,35 @@ export default function Home() {
                 : song.songName;
 
               return (
-                <TiltedCard
-                  key={song.id}
-                  imageSrc={song.imageFile || "/placeholder.svg"}
-                  altText={song.songName}
-                  captionText={caption}
-                  containerHeight="300px"
-                  containerWidth="300px"
-                  imageHeight="300px"
-                  imageWidth="300px"
-                  rotateAmplitude={12}
-                  scaleOnHover={1.05}
-                  showMobileWarning={false}
-                  showTooltip
-                  displayOverlayContent
-                  overlayContent={
-                    <div className="flex h-[300px] w-[300px] flex-col justify-end rounded-[15px] bg-gradient-to-t from-black/70 to-transparent p-5">
-                      <p className="text-lg font-bold text-white">
-                        {song.songName}
-                      </p>
-                      {artistNames && (
-                        <p className="text-sm text-white/80">{artistNames}</p>
-                      )}
-                      <p className="mt-1 text-xs text-white/60">
-                        {song.pricePerSecond} USDC/sec
-                      </p>
-                    </div>
-                  }
-                />
+                <Link key={song.id} href={`/listen/${song.id}`}>
+                  <TiltedCard
+                    imageSrc={song.imageFile || "/placeholder.svg"}
+                    altText={song.songName}
+                    captionText={caption}
+                    containerHeight="300px"
+                    containerWidth="300px"
+                    imageHeight="300px"
+                    imageWidth="300px"
+                    rotateAmplitude={12}
+                    scaleOnHover={1.05}
+                    showMobileWarning={false}
+                    showTooltip
+                    displayOverlayContent
+                    overlayContent={
+                      <div className="flex h-[300px] w-[300px] flex-col justify-end rounded-[15px] bg-gradient-to-t from-black/70 to-transparent p-5">
+                        <p className="text-lg font-bold text-white">
+                          {song.songName}
+                        </p>
+                        {artistNames && (
+                          <p className="text-sm text-white/80">{artistNames}</p>
+                        )}
+                        <p className="mt-1 text-xs text-white/60">
+                          {song.pricePerSecond} USDC/sec
+                        </p>
+                      </div>
+                    }
+                  />
+                </Link>
               );
             })}
           </div>
