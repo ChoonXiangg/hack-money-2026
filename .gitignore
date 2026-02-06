@@ -49,3 +49,6 @@ sui-stack-hello-world
 
 # claude
 .claude
+
+# env
+.env.local

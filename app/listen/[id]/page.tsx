@@ -3,8 +3,16 @@
 import { useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import Grainient from "@/components/ui/Grainient";
 import ElasticSlider from "@/components/ElasticSlider";
 import Counter from "@/components/Counter";
@@ -32,6 +40,10 @@ export default function ListenPage({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPaying, setIsPaying] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [popupStatus, setPopupStatus] = useState<"success" | "partial" | "error">("success");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [popupDetails, setPopupDetails] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -93,6 +105,13 @@ export default function ListenPage({
     timerRef.current = null;
   };
 
+  const showPopup = (status: "success" | "partial" | "error", message: string, details: string) => {
+    setPopupStatus(status);
+    setPopupMessage(message);
+    setPopupDetails(details);
+    setPopupOpen(true);
+  };
+
   const handleFinishAndPay = async () => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -102,7 +121,7 @@ export default function ListenPage({
     }
 
     if (secondsListened <= 0) {
-      alert("You haven't listened to any of the song yet!");
+      showPopup("error", "No listening time", "You haven't listened to any of the song yet!");
       return;
     }
 
@@ -117,7 +136,7 @@ export default function ListenPage({
       const data = await res.json();
 
       if (!res.ok) {
-        alert(`Payment failed: ${data.error || "Unknown error"}`);
+        showPopup("error", "Payment Failed", data.error || "Unknown error");
         return;
       }
 
@@ -126,19 +145,21 @@ export default function ListenPage({
       const totalPaid = data.totalAmount || "0";
 
       if (failCount > 0) {
-        alert(
-          `Partial payment: ${successCount} succeeded, ${failCount} failed.\nTotal: ${totalPaid} USDC for ${secondsListened}s of "${song?.songName}"`
+        showPopup(
+          "partial",
+          "Partial Payment",
+          `${successCount} succeeded, ${failCount} failed.\n${totalPaid} USDC for ${secondsListened}s of "${song?.songName}"`
         );
       } else {
-        alert(
-          `Payment successful! ${totalPaid} USDC paid for ${secondsListened}s of "${song?.songName}"`
+        showPopup(
+          "success",
+          "Payment Successful",
+          `${totalPaid} USDC paid for ${secondsListened}s of "${song?.songName}"`
         );
       }
-
-      router.push("/");
     } catch (error) {
       console.error("Payment error:", error);
-      alert("Payment failed. Please try again.");
+      showPopup("error", "Payment Failed", "Something went wrong. Please try again.");
     } finally {
       setIsPaying(false);
     }
@@ -343,6 +364,43 @@ export default function ListenPage({
           </div>
         </div>
       </div>
+
+      {/* Payment Result Popup */}
+      <Dialog open={popupOpen} onOpenChange={(open) => {
+        setPopupOpen(open);
+        if (!open && popupStatus !== "error") {
+          router.push("/");
+        }
+      }}>
+        <DialogContent className="border-black/20 bg-white/90 backdrop-blur-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2">
+              {popupStatus === "success" && <CheckCircle className="h-12 w-12 text-green-600" />}
+              {popupStatus === "partial" && <AlertTriangle className="h-12 w-12 text-yellow-600" />}
+              {popupStatus === "error" && <XCircle className="h-12 w-12 text-red-600" />}
+            </div>
+            <DialogTitle className="text-center text-xl text-black">
+              {popupMessage}
+            </DialogTitle>
+            <DialogDescription className="whitespace-pre-line text-center text-black/70">
+              {popupDetails}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={() => {
+                setPopupOpen(false);
+                if (popupStatus !== "error") {
+                  router.push("/");
+                }
+              }}
+              className="bg-black px-8 py-2 text-white transition-all duration-300 hover:scale-105 hover:bg-black hover:shadow-lg"
+            >
+              {popupStatus === "error" ? "Close" : "Back to Home"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
