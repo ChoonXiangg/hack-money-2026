@@ -1,0 +1,18 @@
+{
+  "anonymous": [
+    {
+      "artistName": "Trellion",
+      "tier": 1,
+      "badgeObjectId": "0x411a59c16bb328f49c8213dfc58f2cefaf18f26cee3faf157df5f4e38a151b8c",
+      "txDigest": "ExKxZdgC6coS6CWD81ZuCzca3yGMmp3mS3hp6ioJFFk4",
+      "timestamp": "2026-02-06T22:28:56.659Z"
+    },
+    {
+      "artistName": "Kendrick",
+      "tier": 1,
+      "badgeObjectId": "0x6ba766fa4d1d3ab6e6c401a3371d42b7bc186b1ccd160b89211d660e85a13fb9",
+      "txDigest": "4bjLbnLvmow3cjTdzf9f9sGzYXCEfdpkqfJi9wgsFS2o",
+      "timestamp": "2026-02-06T22:28:59.977Z"
+    }
+  ]
+}

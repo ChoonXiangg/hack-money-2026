@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Play, Pause, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Play, Pause, CheckCircle, XCircle, AlertTriangle, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,6 +44,7 @@ export default function ListenPage({
   const [popupStatus, setPopupStatus] = useState<"success" | "partial" | "error">("success");
   const [popupMessage, setPopupMessage] = useState("");
   const [popupDetails, setPopupDetails] = useState("");
+  const [earnedBadges, setEarnedBadges] = useState<{ artistName: string; tierName: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -126,7 +127,9 @@ export default function ListenPage({
     }
 
     setIsPaying(true);
+    setEarnedBadges([]);
     try {
+      // 1. Process payment
       const res = await fetch("/api/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -143,6 +146,56 @@ export default function ListenPage({
       const successCount = data.summary?.successful || 0;
       const failCount = data.summary?.failed || 0;
       const totalPaid = data.totalAmount || "0";
+
+      // 2. Persist listening time
+      const listenerAddress = typeof window !== "undefined"
+        ? localStorage.getItem("walletAddress") || "anonymous"
+        : "anonymous";
+
+      let badgesEarned: { artistName: string; tierName: string }[] = [];
+
+      try {
+        const listenRes = await fetch("/api/listening", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            listenerAddress,
+            songId: id,
+            seconds: secondsListened,
+          }),
+        });
+
+        const listenData = await listenRes.json();
+
+        // 3. Check and mint badges for newly eligible artists
+        if (listenData.newBadgeEligibility?.length > 0) {
+          for (const eligible of listenData.newBadgeEligibility) {
+            try {
+              const mintRes = await fetch("/api/badges/mint", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  listenerAddress,
+                  artistName: eligible.artistName,
+                }),
+              });
+              const mintData = await mintRes.json();
+              if (mintRes.ok && mintData.tierName) {
+                badgesEarned.push({
+                  artistName: eligible.artistName,
+                  tierName: mintData.tierName,
+                });
+              }
+            } catch {
+              // Badge minting failed, don't block the flow
+            }
+          }
+        }
+      } catch {
+        // Listening persistence failed, don't block the flow
+      }
+
+      setEarnedBadges(badgesEarned);
 
       if (failCount > 0) {
         showPopup(
@@ -386,6 +439,22 @@ export default function ListenPage({
               {popupDetails}
             </DialogDescription>
           </DialogHeader>
+          {earnedBadges.length > 0 && (
+            <div className="mx-auto mt-2 space-y-2">
+              {earnedBadges.map((badge, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm"
+                >
+                  <Award className="h-5 w-5 text-amber-600" />
+                  <span className="text-black/80">
+                    <strong>{badge.tierName}</strong> badge earned for{" "}
+                    <strong>{badge.artistName}</strong>!
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <DialogFooter className="sm:justify-center">
             <Button
               onClick={() => {

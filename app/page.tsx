@@ -19,6 +19,7 @@ interface Song {
 
 const menuItems = [
   { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
+  { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
 ];
 
 export default function Home() {
@@ -122,8 +123,28 @@ export default function Home() {
                         <p className="text-lg font-bold text-white">
                           {song.songName}
                         </p>
-                        {artistNames && (
-                          <p className="text-sm text-white/80">{artistNames}</p>
+                        {song.collaborators.filter(c => c.artistName).length > 0 && (
+                          <p className="text-sm text-white/80">
+                            {song.collaborators
+                              .filter(c => c.artistName)
+                              .map((c, i) => (
+                                <span key={i}>
+                                  {i > 0 && ", "}
+                                  <span
+                                    role="link"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.location.href = `/artist/${encodeURIComponent(c.artistName)}`;
+                                    }}
+                                    className="cursor-pointer hover:underline"
+                                  >
+                                    {c.artistName}
+                                  </span>
+                                </span>
+                              ))}
+                          </p>
                         )}
                         <p className="mt-1 text-xs text-white/60">
                           {song.pricePerSecond} USDC/sec
