@@ -1,5 +1,6 @@
 import { sepolia } from 'viem/chains';
 import type { Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import type { YellowConfig } from './types';
 
 // ============================================================================
@@ -45,9 +46,13 @@ export const DEFAULT_TOKEN_ADDRESS = '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb
 // Relayer Configuration
 // ============================================================================
 
-// Relayer wallet address - receives payments on session end
+// Relayer wallet address - derived from RELAYER_PRIVATE_KEY in .env
 // This address handles cross-chain distribution to artists via Circle CCTP
-export const RELAYER_ADDRESS = '0xC0df42b03E9438dc744935578B4FA90344937FC6' as Address;
+const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}`;
+if (!RELAYER_PRIVATE_KEY) {
+    throw new Error('RELAYER_PRIVATE_KEY is required in .env file');
+}
+export const RELAYER_ADDRESS = privateKeyToAccount(RELAYER_PRIVATE_KEY).address as Address;
 
 // ============================================================================
 // Asset Configuration
