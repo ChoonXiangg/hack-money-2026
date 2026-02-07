@@ -7,22 +7,7 @@ const CHAINS = [
   {
     name: "Ethereum Sepolia",
     rpc: "https://ethereum-sepolia-rpc.publicnode.com",
-    usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-  },
-  {
-    name: "Avalanche Fuji",
-    rpc: "https://api.avax-test.network/ext/bc/C/rpc",
-    usdc: "0x5425890298aed601595a70AB815c96711a31Bc65",
-  },
-  {
-    name: "Base Sepolia",
-    rpc: "https://sepolia.base.org",
-    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  },
-  {
-    name: "Arc Testnet",
-    rpc: "https://rpc.testnet.arc.network",
-    usdc: "0x3600000000000000000000000000000000000000",
+    usdc: "0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb", // ytest.usd token (Yellow Network sandbox USDC)
   },
 ];
 
