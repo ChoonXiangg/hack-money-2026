@@ -5,6 +5,7 @@ import Link from "next/link";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import TiltedCard from "@/components/TiltedCard";
 import ConnectWallet from "@/components/ConnectWallet";
+import StreamCredits from "@/components/StreamCredits";
 import Grainient from "@/components/ui/Grainient";
 
 interface Song {
@@ -76,8 +77,11 @@ export default function Home() {
         accentColor="#5227FF"
         isFixed
         logoElement={
-          <div className="flex items-center gap-3">
-            <ConnectWallet />
+          <div className="flex items-start gap-3">
+            <div className="flex flex-col gap-2">
+              <ConnectWallet />
+              <StreamCredits />
+            </div>
             <Link href="/" className="font-[family-name:var(--font-climate)] text-3xl text-black transition-opacity hover:opacity-70">
               LeStream
             </Link>
