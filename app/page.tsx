@@ -19,6 +19,8 @@ interface Song {
 
 const menuItems = [
   { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
+  { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
+  { label: "My Top Listeners", ariaLabel: "View your top listeners", link: "/top-listeners" },
 ];
 
 export default function Home() {
@@ -73,20 +75,18 @@ export default function Home() {
         colors={["#B19EEF", "#5227FF"]}
         accentColor="#5227FF"
         isFixed
-        logoElement={<ConnectWallet />}
-        centerElement={
-          <span className="font-[family-name:var(--font-climate)] text-3xl text-black">
-            LeStream
-          </span>
+        logoElement={
+          <div className="flex items-center gap-3">
+            <ConnectWallet />
+            <Link href="/" className="font-[family-name:var(--font-climate)] text-3xl text-black transition-opacity hover:opacity-70">
+              LeStream
+            </Link>
+          </div>
         }
       />
 
       {/* Main Content */}
       <div className="relative z-10 px-8 pt-32 pb-16">
-        <h2 className="mb-12 text-center font-[family-name:var(--font-climate)] text-5xl text-black">
-          New Releases
-        </h2>
-
         {songs.length === 0 ? (
           <p className="text-center text-lg text-black/60">
             No songs yet. Upload your first track!
@@ -122,8 +122,28 @@ export default function Home() {
                         <p className="text-lg font-bold text-white">
                           {song.songName}
                         </p>
-                        {artistNames && (
-                          <p className="text-sm text-white/80">{artistNames}</p>
+                        {song.collaborators.filter(c => c.artistName).length > 0 && (
+                          <p className="text-sm text-white/80">
+                            {song.collaborators
+                              .filter(c => c.artistName)
+                              .map((c, i) => (
+                                <span key={i}>
+                                  {i > 0 && ", "}
+                                  <span
+                                    role="link"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.location.href = `/artist/${encodeURIComponent(c.artistName)}`;
+                                    }}
+                                    className="cursor-pointer hover:underline"
+                                  >
+                                    {c.artistName}
+                                  </span>
+                                </span>
+                              ))}
+                          </p>
                         )}
                         <p className="mt-1 text-xs text-white/60">
                           {song.pricePerSecond} USDC/sec
