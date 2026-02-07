@@ -13,6 +13,7 @@ import type { CreateAppSessionResponse, CloseAppSessionResponse, ListeningActivi
 import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS, SESSION_CONFIG } from '../config';
 import { depositToCustody } from './resize';
 import { getTokenBalance } from './relayer';
+import { performRelayerWithdrawal } from './relayerWithdraw';
 
 // ============================================================================
 // App Session Creation
@@ -636,6 +637,25 @@ export async function endAppSession(
         console.log(`    No refund due (user spent entire deposit)`);
     }
 
+    // Step 4: Relayer automatically withdraws their portion
+    console.log(`\n  [Step 4] Relayer withdrawing earned funds...`);
+
+    let relayerWithdrawTxHash: Hash | undefined;
+    if (relayerPayment > 0n) {
+        const relayerResult = await performRelayerWithdrawal({
+            expectedAmount: relayerPayment,
+        });
+
+        if (relayerResult.success && relayerResult.txHash) {
+            relayerWithdrawTxHash = relayerResult.txHash;
+            console.log(`    ✓ Relayer withdrawal complete: ${formatUSDCDisplay(relayerResult.withdrawnAmount)}`);
+        } else if (relayerResult.error) {
+            console.log(`    ⚠ Relayer withdrawal failed: ${relayerResult.error}`);
+        }
+    } else {
+        console.log(`    No payment for relayer (user spent nothing)`);
+    }
+
     // Verify final balances
     await new Promise(r => setTimeout(r, 2000));
 
@@ -645,7 +665,7 @@ export async function endAppSession(
     console.log('\n  [Final Balances]');
     console.log(`    User wallet: ${formatUSDCDisplay(finalUserWallet)}`);
     console.log(`    User custody: ${formatUSDCDisplay(finalUserCustody)}`);
-    console.log(`    Relayer allocation: ${formatUSDCDisplay(relayerPayment)} (withdraw via relayer:withdraw)`);
+    console.log(`    Relayer withdrawn: ${formatUSDCDisplay(relayerPayment)}`);
 
     // Log listening activity for verification
     console.log(`\n  Listening Activity (${listeningActivity.length} songs):`);
@@ -656,7 +676,7 @@ export async function endAppSession(
     return {
         closeResponse,
         userWithdrawTxHash,
-        relayerTransferTxHash: undefined, // No ERC20 transfer - relayer withdraws from their custody
+        relayerTransferTxHash: relayerWithdrawTxHash,
         relayerReceived: relayerPayment,
         userRefund,
         listeningActivity,
