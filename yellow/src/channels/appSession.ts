@@ -55,30 +55,34 @@ export async function createAppSession(
     // IMPORTANT: Use weights [100, 0] and quorum 100 for single-signer mode
     // This allows the user to sign state updates without needing relayer's signature
     // The relayer is passive and doesn't need to actively sign
+    const appDefinition = {
+        application: SESSION_CONFIG.applicationName,
+        protocol: RPCProtocolVersion.NitroRPC_0_4,
+        participants: [userAddress, relayerAddress],
+        weights: [100, 0],  // User has full weight, relayer has none
+        quorum: 100,        // Only user's signature needed
+        challenge: 0,       // No challenge period for instant updates
+        nonce: Date.now(),  // Unique nonce for this session
+    };
+
+    const appAllocations = [
+        {
+            participant: userAddress,
+            asset: tokenSymbol,
+            amount: depositAmount.toString(),
+        },
+        {
+            participant: relayerAddress,
+            asset: tokenSymbol,
+            amount: '0',
+        },
+    ];
+
     const appSessionMsg = await createAppSessionMessage(
         sessionKeyPair.signer,
         {
-            definition: {
-                application: SESSION_CONFIG.applicationName,
-                protocol: RPCProtocolVersion.NitroRPC_0_4,
-                participants: [userAddress, relayerAddress],
-                weights: [100, 0],  // User has full weight, relayer has none
-                quorum: 100,        // Only user's signature needed
-                challenge: 0,       // No challenge period for instant updates
-                nonce: Date.now(),  // Unique nonce for this session
-            },
-            allocations: [
-                {
-                    participant: userAddress,
-                    asset: tokenSymbol,
-                    amount: depositAmount.toString(),
-                },
-                {
-                    participant: relayerAddress,
-                    asset: tokenSymbol,
-                    amount: '0',
-                },
-            ],
+            definition: appDefinition,
+            allocations: appAllocations,
         }
     );
 
@@ -112,30 +116,28 @@ function waitForAppSessionCreation(
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+
+                // Check for error response: msg.res[1] === 'error'
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(errorMsg));
+                    return;
+                }
+
                 if (msg.res && msg.res[1] === 'create_app_session') {
                     const payload = msg.res[2];
-
-                    // DEBUG: Log raw server response
-                    console.log('  [DEBUG] Raw create_app_session response:');
-                    console.log('    payload type:', typeof payload);
-                    console.log('    payload:', JSON.stringify(payload, null, 2));
 
                     // Handle both array and object response formats
                     const sessionData = Array.isArray(payload) ? payload[0] : payload;
                     const sessionId = sessionData?.app_session_id || sessionData?.sessionId;
 
-                    // DEBUG: Log parsed session data
-                    console.log('  [DEBUG] Parsed sessionData:');
-                    console.log('    sessionData:', JSON.stringify(sessionData, null, 2));
-                    console.log('    sessionId:', sessionId);
-                    console.log('    version:', sessionData?.version);
-                    console.log('    allocations:', JSON.stringify(sessionData?.allocations));
-
                     clearTimeout(timeout);
                     ws.off('message', handler);
                     console.log(`  ✓ App Session created: ${sessionId}`);
                     console.log(`    Version: ${sessionData?.version || 1}`);
-                    console.log(`    Allocations: ${JSON.stringify(sessionData?.allocations || [])}`);
 
                     resolve({
                         appSessionId: sessionId,
@@ -146,7 +148,7 @@ function waitForAppSessionCreation(
                 if (msg.error) {
                     clearTimeout(timeout);
                     ws.off('message', handler);
-                    reject(new Error(msg.error.message || 'Create App Session error'));
+                    reject(new Error(msg.error.message || JSON.stringify(msg.error) || 'Create App Session error'));
                 }
             } catch (err) {
                 // Ignore parse errors
