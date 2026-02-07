@@ -1,18 +1,61 @@
 {
-  "anonymous": [
+  "0x843b9ec5c49092bbf874acbacb397d2c252e36a4": [
     {
       "artistName": "Trellion",
       "tier": 1,
-      "badgeObjectId": "0x411a59c16bb328f49c8213dfc58f2cefaf18f26cee3faf157df5f4e38a151b8c",
-      "txDigest": "ExKxZdgC6coS6CWD81ZuCzca3yGMmp3mS3hp6ioJFFk4",
-      "timestamp": "2026-02-06T22:28:56.659Z"
+      "badgeObjectId": "0x05ce2ffd2f3ed0761dfc14f249e88699b7a2c94c6334d17ddb7414df5e0348ea",
+      "txDigest": "6Ru3LkYv6mBGHpw4HqR1d67diGJH1BXiTeBnhDEePT49",
+      "timestamp": "2026-02-07T11:30:07.563Z"
     },
     {
       "artistName": "Kendrick",
+      "tier": 2,
+      "badgeObjectId": "0x8745a9db922b5aa53c2932b118f81890c3f1e2c37583b67bef16c5a44de1da5e",
+      "txDigest": "478ZRRKWU1HfsvCtFHDLQ4S4BVoLHo8XidENC3F2efuz",
+      "timestamp": "2026-02-07T14:07:38.549Z"
+    },
+    {
+      "artistName": "Solaris",
+      "tier": 3,
+      "badgeObjectId": "0x836fcdd0bbd54f24ea4833959181647e2f3464561a07fa565b0478625a014d11",
+      "txDigest": "7CmemRUz7xuDVRw4d6VxKdzWUeZpdBaohjvgCLvaemxB",
+      "timestamp": "2026-02-07T14:07:43.587Z"
+    }
+  ],
+  "0x96244711f04a3899cf5c3b1e727409e1856d6874": [
+    {
+      "artistName": "Trellion",
       "tier": 1,
-      "badgeObjectId": "0x6ba766fa4d1d3ab6e6c401a3371d42b7bc186b1ccd160b89211d660e85a13fb9",
-      "txDigest": "4bjLbnLvmow3cjTdzf9f9sGzYXCEfdpkqfJi9wgsFS2o",
-      "timestamp": "2026-02-06T22:28:59.977Z"
+      "badgeObjectId": "0xfb85419449d6308c3dc19366a5f3301ffc0de2111114a6d6afbf96c8eae568f9",
+      "txDigest": "7y6qRbyQsBTqoxYp2i34tGEJN1v6G67BXgCRGrM1xpKs",
+      "timestamp": "2026-02-07T13:34:59.585Z"
+    }
+  ],
+  "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03": [
+    {
+      "artistName": "Trellion",
+      "tier": 1,
+      "badgeObjectId": "0x626e570dcb8ab9bafd24e1052dd9d2167dc87ab57413e23f5507aa3b6551c9cd",
+      "txDigest": "4ocTkYGSxUJbZAJJsac8QQ9YjJLf7orfRrXSHpENXMyA",
+      "timestamp": "2026-02-07T13:35:13.918Z"
+    }
+  ],
+  "0x32ca66907109e94898443d0414cd9ef696e37915": [
+    {
+      "artistName": "Trellion",
+      "tier": 1,
+      "badgeObjectId": "0x8ef9e89b6a5374e5008277b6b74a462ae601f8895bb5b610048988354a8bc948",
+      "txDigest": "2DeDst2uSiaj5kR57yZhFqJzyU3vAVBFheFb1JFyw3C3",
+      "timestamp": "2026-02-07T13:35:27.314Z"
+    }
+  ],
+  "0xd57200be5c64911475821c7ca98b62bd83b098a4": [
+    {
+      "artistName": "Trellion",
+      "tier": 1,
+      "badgeObjectId": "0xe79ded996fea7b6bd4bc1d0b65ee07592279c4a5f9d47f910531ef3af0053c92",
+      "txDigest": "5ao85v5qU2pphzrnJgUey2r6GKs3uPV6tS939T8NLUjT",
+      "timestamp": "2026-02-07T13:35:36.745Z"
     }
   ]
 }

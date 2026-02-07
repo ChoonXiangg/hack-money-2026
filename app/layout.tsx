@@ -30,6 +30,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Monsieur+La+Doulaise&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body
         className={`${murecho.variable} ${geistMono.variable} ${climateCrisis.variable} font-[family-name:var(--font-murecho)] antialiased`}
       >

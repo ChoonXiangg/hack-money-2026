@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Dropdown,
@@ -14,6 +14,15 @@ export default function ConnectWallet() {
   const [savedAddress, setSavedAddress] = useState("");
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("walletAddress");
+    if (stored) {
+      setAddress(stored);
+      setSavedAddress(stored);
+      fetchBalance(stored);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBalance = useCallback(async (walletAddress: string) => {
     setIsLoading(true);
@@ -34,6 +43,7 @@ export default function ConnectWallet() {
     if (!address) return;
     setSavedAddress(address);
     localStorage.setItem("walletAddress", address);
+    window.dispatchEvent(new Event("walletChanged"));
     fetchBalance(address);
   };
 
@@ -42,6 +52,7 @@ export default function ConnectWallet() {
     setAddress("");
     setBalance(null);
     localStorage.removeItem("walletAddress");
+    window.dispatchEvent(new Event("walletChanged"));
   };
 
   const truncated = savedAddress
