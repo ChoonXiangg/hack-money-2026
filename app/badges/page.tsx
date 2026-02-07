@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
@@ -9,6 +9,7 @@ import CircularGallery from "@/components/CircularGallery";
 
 interface Badge {
   artistName: string;
+  artistAddress: string;
   tier: number;
   tierName: string;
   badgeObjectId: string;
@@ -17,19 +18,69 @@ interface Badge {
   totalSeconds: number;
 }
 
-function generateBadgeImage(tierName: string, artistName: string): string {
+const tierColors: Record<string, { bg: string; text: string; sub: string }> = {
+  Bronze: { bg: "#CD7F32", text: "#3E2723", sub: "rgba(62,39,35,0.6)" },
+  Silver: { bg: "#C0C0C0", text: "#212121", sub: "rgba(33,33,33,0.6)" },
+  Gold:   { bg: "#FFD700", text: "#4E3B00", sub: "rgba(78,59,0,0.6)" },
+};
+
+const NEXT_TIER: Record<string, { name: string; threshold: number }> = {
+  Bronze: { name: "Silver", threshold: 3600 },
+  Silver: { name: "Gold", threshold: 36000 },
+};
+
+function formatTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `${hrs}h ${remMins}m` : `${hrs}h`;
+}
+
+function truncateAddr(addr: string): string {
+  if (addr.length <= 14) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+function generateBadgeImage(badge: Badge): string {
   const canvas = document.createElement("canvas");
   canvas.width = 800;
   canvas.height = 600;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "black";
+  const colors = tierColors[badge.tierName] || tierColors.Bronze;
+
+  // Background
+  ctx.fillStyle = colors.bg;
+  ctx.fillRect(0, 0, 800, 600);
+
+  // Artist name
+  ctx.fillStyle = colors.text;
   ctx.font = '72px "Monsieur La Doulaise"';
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(artistName, 400, 260);
+  ctx.fillText(badge.artistName, 400, 180);
+
+  // Tier label
   ctx.font = "bold 28px sans-serif";
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillText(`${tierName} Badge`, 400, 360);
+  ctx.fillStyle = colors.sub;
+  ctx.fillText(`${badge.tierName} Badge`, 400, 270);
+
+  // Info lines
+  ctx.font = "20px sans-serif";
+  ctx.fillStyle = colors.text;
+  ctx.fillText(`Artist: ${truncateAddr(badge.artistAddress)}`, 400, 350);
+  ctx.fillText(`Listened: ${formatTime(badge.totalSeconds)}`, 400, 390);
+
+  const next = NEXT_TIER[badge.tierName];
+  if (next) {
+    const remaining = Math.max(0, next.threshold - badge.totalSeconds);
+    ctx.fillText(`${formatTime(remaining)} to ${next.name}`, 400, 430);
+  } else {
+    ctx.fillText("Max tier reached!", 400, 430);
+  }
+
   return canvas.toDataURL();
 }
 
@@ -38,6 +89,19 @@ export default function BadgesPage() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [fontsReady, setFontsReady] = useState(false);
+
+  const badgesRef = useRef(badges);
+  badgesRef.current = badges;
+
+  const handleBadgeClick = useCallback((index: number) => {
+    const badge = badgesRef.current[index];
+    if (badge?.badgeObjectId) {
+      window.open(
+        `https://suiscan.xyz/testnet/object/${badge.badgeObjectId}`,
+        "_blank"
+      );
+    }
+  }, []);
 
   const checkWallet = useCallback(() => {
     setConnected(!!localStorage.getItem("walletAddress"));
@@ -75,8 +139,8 @@ export default function BadgesPage() {
   const galleryItems = useMemo(() => {
     if (!fontsReady || badges.length === 0) return [];
     return badges.map((badge) => ({
-      image: generateBadgeImage(badge.tierName, badge.artistName),
-      text: `${badge.tierName} Badge`,
+      image: generateBadgeImage(badge),
+      text: "",
     }));
   }, [badges, fontsReady]);
 
@@ -166,6 +230,7 @@ export default function BadgesPage() {
               borderRadius={0.05}
               scrollSpeed={2}
               scrollEase={0.05}
+              onItemClick={handleBadgeClick}
             />
           </div>
         )}
