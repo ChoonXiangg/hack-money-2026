@@ -43,5 +43,17 @@
       "totalSeconds": 300,
       "lastUpdated": "2026-02-07T00:00:00.000Z"
     }
+  },
+  "0x14ebe0528f5ad451589bb8667b11a6fd77f86bb6": {
+    "Trellion": {
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "totalSeconds": 3,
+      "lastUpdated": "2026-02-07T18:24:41.378Z"
+    },
+    "Kendrick": {
+      "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+      "totalSeconds": 3,
+      "lastUpdated": "2026-02-07T18:24:41.378Z"
+    }
   }
 }
