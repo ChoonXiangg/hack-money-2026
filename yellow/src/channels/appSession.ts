@@ -442,41 +442,36 @@ export async function startAppSession(
     console.log(`  Relayer: ${relayerAddress}`);
     console.log(`  Deposit: ${formatUSDCDisplay(depositAmount)}`);
 
-    // Step 1: Check custody balance and deposit if needed
-    const custodyBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-    console.log(`  Current custody balance: ${formatUSDCDisplay(custodyBalance)}`);
+    // Step 1: Always deposit the requested amount on-chain (wallet -> custody)
+    const custodyBalanceBefore = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+    console.log(`  Current custody balance: ${formatUSDCDisplay(custodyBalanceBefore)}`);
 
-    let depositTxHash: Hash | undefined;
+    // Check wallet balance
+    const walletBalance = await getTokenBalance(publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
+    console.log(`  Wallet balance: ${formatUSDCDisplay(walletBalance)}`);
 
-    if (custodyBalance < depositAmount) {
-        const depositNeeded = depositAmount - custodyBalance;
-        console.log(`  Need to deposit ${formatUSDCDisplay(depositNeeded)} to custody`);
-
-        // Check wallet balance
-        const walletBalance = await getTokenBalance(publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
-        console.log(`  Wallet balance: ${formatUSDCDisplay(walletBalance)}`);
-
-        if (walletBalance < depositNeeded) {
-            throw new Error(
-                `Insufficient funds. Need ${formatUSDCDisplay(depositAmount)} but only have ` +
-                `${formatUSDCDisplay(walletBalance + custodyBalance)} total.`
-            );
-        }
-
-        // Deposit to custody
-        depositTxHash = await depositToCustody(
-            client,
-            publicClient,
-            DEFAULT_TOKEN_ADDRESS,
-            depositNeeded
+    if (walletBalance < depositAmount) {
+        throw new Error(
+            `Insufficient wallet funds. Need ${formatUSDCDisplay(depositAmount)} but wallet only has ` +
+            `${formatUSDCDisplay(walletBalance)}.`
         );
-
-        // Wait for custody balance to update
-        await new Promise(r => setTimeout(r, 3000));
-
-        const newCustodyBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-        console.log(`  Custody balance after deposit: ${formatUSDCDisplay(newCustodyBalance)}`);
     }
+
+    // Always deposit the full amount on-chain
+    console.log(`  Depositing ${formatUSDCDisplay(depositAmount)} from wallet to custody (on-chain TX)...`);
+    const depositTxHash = await depositToCustody(
+        client,
+        publicClient,
+        DEFAULT_TOKEN_ADDRESS,
+        depositAmount
+    );
+    console.log(`  ✓ Deposit TX: ${depositTxHash}`);
+
+    // Wait for custody balance to update
+    await new Promise(r => setTimeout(r, 3000));
+
+    const custodyBalanceAfter = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+    console.log(`  Custody balance after deposit: ${formatUSDCDisplay(custodyBalanceAfter)}`);
 
     // Step 2: Create App Session
     const sessionResult = await createAppSession({
