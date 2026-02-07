@@ -1,14 +1,47 @@
 {
-  "anonymous": {
+  "0x843b9ec5c49092bbf874acbacb397d2c252e36a4": {
     "Trellion": {
       "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
       "totalSeconds": 65,
-      "lastUpdated": "2026-02-06T22:28:51.108Z"
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
     },
     "Kendrick": {
       "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
-      "totalSeconds": 65,
-      "lastUpdated": "2026-02-06T22:28:51.108Z"
+      "totalSeconds": 3600,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
+    },
+    "Cole": {
+      "address": "0x96244711f04a3899cf5c3b1e727409e1856d6874",
+      "totalSeconds": 36000,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
+    }
+  },
+  "0x96244711f04a3899cf5c3b1e727409e1856d6874": {
+    "Trellion": {
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "totalSeconds": 120,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
+    }
+  },
+  "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03": {
+    "Trellion": {
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "totalSeconds": 180,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
+    }
+  },
+  "0x32ca66907109e94898443d0414cd9ef696e37915": {
+    "Trellion": {
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "totalSeconds": 240,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
+    }
+  },
+  "0xd57200be5c64911475821c7ca98b62bd83b098a4": {
+    "Trellion": {
+      "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+      "totalSeconds": 300,
+      "lastUpdated": "2026-02-07T00:00:00.000Z"
     }
   }
 }

@@ -117,6 +117,7 @@ export default function ConnectWallet() {
     setAddress("");
     setBalance(null);
     localStorage.removeItem("walletAddress");
+    window.dispatchEvent(new Event("walletChanged"));
   };
 
   const truncated = address
