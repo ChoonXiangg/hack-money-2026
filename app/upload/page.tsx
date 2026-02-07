@@ -2,7 +2,9 @@
 
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Upload, Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
+import { Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
+import ConnectWallet from "@/components/ConnectWallet";
+import StaggeredMenu from "@/components/StaggeredMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,15 +252,34 @@ export default function UploadPage() {
         />
       </div>
 
-      {/* Header */}
-      <div className="relative z-10 px-8 pt-6">
-        <Link href="/" className="font-[family-name:var(--font-climate)] text-2xl text-black transition-opacity hover:opacity-70">
-          LeStream
-        </Link>
-      </div>
+      {/* Navigation Header with StaggeredMenu */}
+      <StaggeredMenu
+        position="right"
+        items={[
+          { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
+          { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
+          { label: "My Top Listeners", ariaLabel: "View your top listeners", link: "/top-listeners" },
+        ]}
+        displaySocials={false}
+        displayItemNumbering={false}
+        menuButtonColor="#000000"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen
+        colors={["#B19EEF", "#5227FF"]}
+        accentColor="#5227FF"
+        isFixed
+        logoElement={
+          <div className="flex items-center gap-3">
+            <ConnectWallet />
+            <Link href="/" className="font-[family-name:var(--font-climate)] text-3xl text-black transition-opacity hover:opacity-70">
+              LeStream
+            </Link>
+          </div>
+        }
+      />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto max-w-2xl px-6 py-8">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 pt-32 pb-8">
         <h1 className="mb-8 text-center text-5xl text-black font-[family-name:var(--font-climate)]">
           Upload Song
         </h1>
@@ -295,12 +316,12 @@ export default function UploadPage() {
               </div>
             ) : (
               <>
-                <Upload className="mb-4 h-12 w-12 text-black/80" />
+                <Music className="mb-4 h-12 w-12 text-black/80" />
                 <p className="text-lg font-medium text-black">
                   Click to Upload or Drag and Drop
                 </p>
                 <p className="mt-1 text-sm text-black/70">
-                  MP3, WAV, FLAC (max 50MB)
+                  MP3, WAV, AAC
                 </p>
               </>
             )}
@@ -339,12 +360,12 @@ export default function UploadPage() {
               </div>
             ) : (
               <>
-                <ImageIcon className="mb-3 h-10 w-10 text-black/80" />
-                <p className="text-base font-medium text-black">
+                <ImageIcon className="mb-4 h-12 w-12 text-black/80" />
+                <p className="text-lg font-medium text-black">
                   Click to Upload or Drag and Drop
                 </p>
                 <p className="mt-1 text-sm text-black/70">
-                  PNG, JPEG (max 50MB)
+                  PNG, JPEG, WEBP
                 </p>
               </>
             )}
@@ -499,9 +520,9 @@ export default function UploadPage() {
                           <SelectTrigger className="w-full border-black/20 bg-black/5 text-black focus:border-black/50 [&>svg]:text-black/70">
                             <SelectValue placeholder="Select blockchain" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-black text-white border-white/20">
                             {SUPPORTED_TESTNETS.map((chain) => (
-                              <SelectItem key={chain.id} value={chain.id}>
+                              <SelectItem key={chain.id} value={chain.id} className="text-white focus:bg-white/10 focus:text-white">
                                 {chain.name}
                               </SelectItem>
                             ))}

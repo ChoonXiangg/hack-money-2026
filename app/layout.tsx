@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Climate_Crisis, Murecho } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const murecho = Murecho({
@@ -32,7 +33,7 @@ export default function RootLayout({
       <body
         className={`${murecho.variable} ${geistMono.variable} ${climateCrisis.variable} font-[family-name:var(--font-murecho)] antialiased`}
       >
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
