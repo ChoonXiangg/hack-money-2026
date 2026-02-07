@@ -2,11 +2,12 @@ import {
     createAppSessionMessage,
     createCloseAppSessionMessage,
     createSubmitAppStateMessage,
+    createTransferMessage,
     NitroliteClient,
     RPCProtocolVersion,
     RPCAppStateIntent,
 } from '@erc7824/nitrolite';
-import type { PublicClient, Address, Hash, WalletClient } from 'viem';
+import { type PublicClient, type Address, type Hash, type WalletClient } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
 import type { CreateAppSessionResponse, CloseAppSessionResponse, ListeningActivity } from '../types';
@@ -530,12 +531,12 @@ export interface EndAppSessionResult {
  * End an App Session with proper fund distribution
  *
  * Flow:
- * 1. Calculate split: user gets refund, relayer gets spent amount
- * 2. Close App Session with final allocations (this sets the final state)
- * 3. User withdraws ONLY their allocated portion (not full custody)
- * 4. Relayer withdraws their portion separately (via relayer:withdraw)
+ * 1. Close App Session off-chain (sets final allocations, funds return to user's unified balance)
+ * 2. Off-chain transfer: user sends relayerPayment to relayer's unified balance (instant, no gas)
+ * 3. User withdraws userRefund from their unified balance (on-chain tx)
+ * 4. Relayer withdraws relayerPayment from their unified balance (on-chain tx)
  *
- * NO ERC20 transfers - funds are distributed via App Session allocations
+ * After all steps, user custody = 0.
  */
 export async function endAppSession(
     params: EndAppSessionParams
@@ -572,9 +573,9 @@ export async function endAppSession(
         );
     }
 
-    // Step 1: Close App Session with final allocations
-    // This sets the final state - funds will be distributed according to allocations
-    console.log('\n  [Step 1] Closing App Session with final allocations...');
+    // Step 1: Close App Session off-chain with final allocations
+    // All funds return to the user's unified balance
+    console.log('\n  [Step 1] Closing App Session off-chain with final allocations...');
     const closeResponse = await closeAppSession({
         ws,
         sessionKeyPair,
@@ -586,71 +587,84 @@ export async function endAppSession(
         tokenSymbol,
     });
 
-    // Log close response details
     console.log('  Close response:', JSON.stringify(closeResponse, null, 2));
-
-    // Wait for close to process
-    console.log('  Waiting for settlement to process...');
+    console.log('  Waiting for off-chain close to process...');
     await new Promise(r => setTimeout(r, 5000));
 
-    // Step 2: Check custody balances after close
-    const userCustodyBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-    console.log(`\n  [Step 2] Checking balances after close...`);
-    console.log(`    User custody balance: ${formatUSDCDisplay(userCustodyBalance)}`);
-    console.log(`    Expected user allocation: ${formatUSDCDisplay(userRefund)}`);
-    console.log(`    Relayer should have: ${formatUSDCDisplay(relayerPayment)} (in their custody)`);
+    // Step 2: Off-chain transfer — move relayer's portion from user's unified balance to relayer's
+    // This is instant, zero gas, purely off-chain
+    console.log(`\n  [Step 2] Off-chain transfer: sending relayer payment to relayer's unified balance...`);
 
-    // Step 3: User withdraws ONLY their allocated portion
-    let userWithdrawTxHash: Hash | undefined;
-
-    console.log(`\n  [Step 3] User withdrawing allocated portion...`);
-
-    // Withdraw only the user's allocated amount, not the full custody balance
-    const withdrawAmount = userRefund > 0n ? userRefund : 0n;
-
-    if (withdrawAmount > 0n) {
-        console.log(`    Withdrawing ${formatUSDCDisplay(withdrawAmount)} (user's allocation)`);
+    if (relayerPayment > 0n) {
+        console.log(`    From: ${userAddress}`);
+        console.log(`    To: ${relayerAddress}`);
+        console.log(`    Amount: ${formatUSDCDisplay(relayerPayment)}`);
 
         try {
-            userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, withdrawAmount);
-            console.log(`    ✓ User withdrawal TX: ${userWithdrawTxHash}`);
+            const transferMsg = await createTransferMessage(
+                sessionKeyPair.signer,
+                {
+                    destination: relayerAddress,
+                    allocations: [
+                        {
+                            asset: tokenSymbol,
+                            amount: relayerPayment.toString(),
+                        },
+                    ],
+                }
+            );
 
-            // Wait for confirmation
+            ws.send(transferMsg);
+
+            // Wait for transfer confirmation
+            await waitForTransferConfirmation(ws);
+            console.log(`    ✓ Off-chain transfer complete`);
+        } catch (err) {
+            console.log(`    ⚠ Off-chain transfer failed: ${err}`);
+        }
+
+        // Brief wait for balances to update
+        await new Promise(r => setTimeout(r, 2000));
+    } else {
+        console.log(`    No payment for relayer (user spent nothing)`);
+    }
+
+    // Step 3: User withdraws their refund from unified balance
+    let userWithdrawTxHash: Hash | undefined;
+    console.log(`\n  [Step 3] User withdrawing refund from unified balance...`);
+
+    if (userRefund > 0n) {
+        const userBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+        console.log(`    User unified balance: ${formatUSDCDisplay(userBalance)}`);
+        console.log(`    Withdrawing user refund: ${formatUSDCDisplay(userRefund)}`);
+
+        try {
+            userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, userRefund);
+            console.log(`    ✓ User withdrawal TX: ${userWithdrawTxHash}`);
             await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
             console.log('    ✓ User withdrawal confirmed');
         } catch (err) {
             console.log(`    ⚠ User withdrawal failed: ${err}`);
-            // Try withdrawing full custody if allocation-based withdrawal fails
-            console.log(`    Trying to withdraw full custody balance instead...`);
-            try {
-                if (userCustodyBalance > 0n) {
-                    userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, userCustodyBalance);
-                    console.log(`    ✓ Fallback withdrawal TX: ${userWithdrawTxHash}`);
-                    await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
-                    console.log('    ✓ Fallback withdrawal confirmed');
-                }
-            } catch (fallbackErr) {
-                console.log(`    ⚠ Fallback withdrawal also failed: ${fallbackErr}`);
-            }
         }
     } else {
         console.log(`    No refund due (user spent entire deposit)`);
     }
 
-    // Step 4: Relayer automatically withdraws their portion
-    console.log(`\n  [Step 4] Relayer withdrawing earned funds...`);
+    // Step 4: Relayer withdraws earned funds (ledger → channel → close → custody → wallet)
+    console.log(`\n  [Step 4] Relayer withdrawing earned funds via channel dance...`);
 
     let relayerWithdrawTxHash: Hash | undefined;
     if (relayerPayment > 0n) {
-        const relayerResult = await performRelayerWithdrawal({
-            expectedAmount: relayerPayment,
-        });
-
-        if (relayerResult.success && relayerResult.txHash) {
-            relayerWithdrawTxHash = relayerResult.txHash;
-            console.log(`    ✓ Relayer withdrawal complete: ${formatUSDCDisplay(relayerResult.withdrawnAmount)}`);
-        } else if (relayerResult.error) {
-            console.log(`    ⚠ Relayer withdrawal failed: ${relayerResult.error}`);
+        try {
+            const relayerResult = await performRelayerWithdrawal({ expectedAmount: relayerPayment });
+            if (relayerResult.success) {
+                relayerWithdrawTxHash = relayerResult.txHash;
+                console.log(`    ✓ Relayer withdrawal complete: ${formatUSDCDisplay(relayerResult.withdrawnAmount)}`);
+            } else {
+                console.log(`    ⚠ Relayer withdrawal failed: ${relayerResult.error}`);
+            }
+        } catch (err) {
+            console.log(`    ⚠ Relayer withdrawal failed: ${err}`);
         }
     } else {
         console.log(`    No payment for relayer (user spent nothing)`);
@@ -664,8 +678,8 @@ export async function endAppSession(
 
     console.log('\n  [Final Balances]');
     console.log(`    User wallet: ${formatUSDCDisplay(finalUserWallet)}`);
-    console.log(`    User custody: ${formatUSDCDisplay(finalUserCustody)}`);
-    console.log(`    Relayer withdrawn: ${formatUSDCDisplay(relayerPayment)}`);
+    console.log(`    User custody: ${formatUSDCDisplay(finalUserCustody)} (should be 0)`);
+    console.log(`    Relayer payment: ${formatUSDCDisplay(relayerPayment)}`);
 
     // Log listening activity for verification
     console.log(`\n  Listening Activity (${listeningActivity.length} songs):`);
@@ -681,4 +695,40 @@ export async function endAppSession(
         userRefund,
         listeningActivity,
     };
+}
+
+/**
+ * Wait for off-chain transfer confirmation
+ */
+function waitForTransferConfirmation(
+    ws: WebSocket,
+    timeoutMs: number = TIMING.wsMessageTimeout
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            ws.off('message', handler);
+            reject(new Error('Transfer timeout'));
+        }, timeoutMs);
+
+        const handler = (data: WebSocket.Data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                if (msg.res && msg.res[1] === 'transfer') {
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    console.log('    Transfer response:', JSON.stringify(msg.res[2], null, 2));
+                    resolve();
+                }
+                if (msg.error) {
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(msg.error.message || 'Transfer error'));
+                }
+            } catch (err) {
+                // Ignore parse errors
+            }
+        };
+
+        ws.on('message', handler);
+    });
 }
