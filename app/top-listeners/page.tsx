@@ -5,7 +5,7 @@ import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import Grainient from "@/components/ui/Grainient";
 
-export default function BadgesPage() {
+export default function TopListenersPage() {
   return (
     <div className="relative min-h-screen">
       <div className="fixed inset-0">
@@ -62,9 +62,9 @@ export default function BadgesPage() {
       />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto max-w-3xl px-6 pt-32 pb-8">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 pt-32 pb-8">
         <h1 className="mb-8 text-center font-[family-name:var(--font-climate)] text-5xl text-black">
-          My Badges
+          My Top Listeners
         </h1>
       </div>
     </div>

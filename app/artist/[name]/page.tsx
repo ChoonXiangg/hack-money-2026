@@ -3,6 +3,8 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { Trophy, Award, Clock } from "lucide-react";
+import ConnectWallet from "@/components/ConnectWallet";
+import StaggeredMenu from "@/components/StaggeredMenu";
 import Grainient from "@/components/ui/Grainient";
 
 interface Listener {
@@ -81,18 +83,34 @@ export default function ArtistPage({
         />
       </div>
 
-      {/* Header */}
-      <div className="relative z-10 px-8 pt-6">
-        <Link
-          href="/"
-          className="font-[family-name:var(--font-climate)] text-2xl text-black transition-opacity hover:opacity-70"
-        >
-          LeStream
-        </Link>
-      </div>
+      {/* Navigation Header with StaggeredMenu */}
+      <StaggeredMenu
+        position="right"
+        items={[
+          { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
+          { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
+          { label: "My Top Listeners", ariaLabel: "View your top listeners", link: "/top-listeners" },
+        ]}
+        displaySocials={false}
+        displayItemNumbering={false}
+        menuButtonColor="#000000"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen
+        colors={["#B19EEF", "#5227FF"]}
+        accentColor="#5227FF"
+        isFixed
+        logoElement={
+          <div className="flex items-center gap-3">
+            <ConnectWallet />
+            <Link href="/" className="font-[family-name:var(--font-climate)] text-3xl text-black transition-opacity hover:opacity-70">
+              LeStream
+            </Link>
+          </div>
+        }
+      />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto max-w-2xl px-6 py-8">
+      <div className="relative z-10 mx-auto max-w-2xl px-6 pt-32 pb-8">
         <h1 className="mb-2 text-center font-[family-name:var(--font-climate)] text-5xl text-black">
           {artistName}
         </h1>
