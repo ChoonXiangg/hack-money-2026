@@ -874,6 +874,9 @@ export class YellowService extends EventEmitter {
             return;
         }
 
+        // Capture song cost BEFORE stopping (stopCurrentPlay adds to totalSpent)
+        const songCost = currentPlay.totalCost;
+
         // Stop current play to finalize cost calculation
         this.sessionManager.stopCurrentPlay();
 
@@ -903,22 +906,22 @@ export class YellowService extends EventEmitter {
         if (userAlloc && userAlloc.amount) {
             currentUserBalance = BigInt(userAlloc.amount);
         } else {
-            // Fallback: user should have full deposit minus any previous spending
-            const totalSpent = this.sessionManager.getTotalSpent();
-            currentUserBalance = this.sessionManager.getState().depositAmount - totalSpent;
-            console.log('  [WARNING] No userAlloc found, using deposit - spent:', formatUSDCDisplay(currentUserBalance));
+            // Fallback: use deposit minus PREVIOUS spending (exclude current song since we'll subtract it below)
+            // Note: getTotalSpent() now includes songCost since stopCurrentPlay() was called
+            const totalSpentBeforeThisSong = this.sessionManager.getTotalSpent() - songCost;
+            currentUserBalance = this.sessionManager.getState().depositAmount - totalSpentBeforeThisSong;
+            console.log('  [WARNING] No userAlloc found, using deposit - previous spent:', formatUSDCDisplay(currentUserBalance));
         }
 
         if (relayerAlloc && relayerAlloc.amount) {
             currentRelayerBalance = BigInt(relayerAlloc.amount);
         } else {
-            // Fallback: relayer should have received all spending so far
-            currentRelayerBalance = this.sessionManager.getTotalSpent();
-            console.log('  [WARNING] No relayerAlloc found, using totalSpent:', formatUSDCDisplay(currentRelayerBalance));
+            // Fallback: relayer has received PREVIOUS spending (exclude current song)
+            currentRelayerBalance = this.sessionManager.getTotalSpent() - songCost;
+            console.log('  [WARNING] No relayerAlloc found, using previous totalSpent:', formatUSDCDisplay(currentRelayerBalance));
         }
 
-        // Calculate new allocations by applying delta (song cost)
-        const songCost = currentPlay.totalCost;
+        // Calculate new allocations by applying delta (song cost already captured above)
         const newUserBalance = currentUserBalance - songCost;
         const newRelayerBalance = currentRelayerBalance + songCost;
 

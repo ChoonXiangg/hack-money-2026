@@ -1,0 +1,49 @@
+============================================================
+Relayer Withdrawal (App Sessions Mode)
+============================================================
+Relayer Address: 0xC0df42b03E9438dc744935578B4FA90344937FC6
+Token: 0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb
+
+[1] Checking On-Chain Balance
+  On-chain wallet: 0.0064 USDC
+
+[2] Connecting to Yellow Network...
+  Connected to Yellow Network
+  [DEBUG] Received: assets
+  [DEBUG] Received: auth_challenge
+  [DEBUG] Received: auth_verify
+  ✓ Authenticated
+  Querying ledger balance...
+  [DEBUG] Received: channels
+  [DEBUG] Received: bu
+  [DEBUG] Received: get_ledger_balances
+  Ledger balances response: {
+  "ledger_balances": [
+    {
+      "asset": "ytest.usd",
+      "amount": "16000"
+    }
+  ]
+}
+
+============================================================
+RELAYER BALANCES
+============================================================
+  On-chain (wallet):   0.0064 USDC
+  Ledger (Yellow):     0.0160 USDC
+  Total:               0.0224 USDC
+
+============================================================
+WITHDRAWAL INSTRUCTIONS
+============================================================
+You have 0.0160 USDC in your Yellow Network ledger.
+
+To withdraw funds from ledger to on-chain:
+  1. Create a payment channel with a resize_channel request
+  2. Use allocate_amount to move funds from ledger to channel
+  3. Close the channel to send funds to on-chain custody
+  4. Call NitroliteClient.withdrawal() to withdraw from custody to wallet
+
+Or use the Yellow Network dashboard to withdraw directly.
+
+View on Etherscan: https://sepolia.etherscan.io/address/0xC0df42b03E9438dc744935578B4FA90344937FC6
