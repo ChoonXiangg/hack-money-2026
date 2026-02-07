@@ -10,7 +10,7 @@ import type {
     PlayEvent,
     TransferResult,
     SettlementResult,
-    Channel,
+    ListeningActivity,
 } from './types';
 
 import {
@@ -33,8 +33,6 @@ import {
 import { createClients, type ClientBundle } from './client';
 
 import {
-    requestLedgerBalances,
-    findOpenChannel,
     getTokenFromConfig,
     sendCreateChannelRequest,
     submitChannelToBlockchain,
@@ -42,8 +40,10 @@ import {
 } from './channels/create';
 
 import { fundChannel } from './channels/resize';
-import { sendCloseChannelRequest, waitForCloseConfirmation, submitCloseToBlockchain, withdrawFromCustody } from './channels/close';
-import { transferToRelayer } from './channels/relayer';
+import { sendCloseChannelRequest, waitForCloseConfirmation, submitCloseToBlockchain, withdrawFromCustody, logOnChainChannelState } from './channels/close';
+import { transferToRelayer, getTokenBalance } from './channels/relayer';
+import { getUserCustodyBalance, getChannelBalance } from './channels/create';
+import { startAppSession, endAppSession, submitAppState } from './channels/appSession';
 import { formatUSDCDisplay, RELAYER_ADDRESS, CONTRACT_ADDRESSES, DEFAULT_TOKEN_ADDRESS } from './config';
 
 import { SessionManager } from './session/SessionManager';
@@ -56,6 +56,10 @@ export interface YellowServiceConfig {
     privateKey: `0x${string}`;
     environment?: 'sandbox' | 'production';
     rpcUrl?: string;
+    /** Use App Sessions for 2-party fund distribution (user + relayer) */
+    useAppSessions?: boolean;
+    /** Relayer address for App Sessions (receives spent amount on close) */
+    relayerAddress?: Address;
 }
 
 /**
@@ -73,10 +77,22 @@ export class YellowService extends EventEmitter {
     private token: Address | null = null;
     private isConnecting: boolean = false;
     private messageHandlers: Map<string, (data: unknown) => void> = new Map();
+    /** App Session ID when using App Sessions mode */
+    private appSessionId: `0x${string}` | null = null;
+    /** App Session version for state updates (microtransactions) */
+    private appSessionVersion: number = 1;
+    /** Server-confirmed allocations for App Session (tracks actual state) */
+    private appSessionAllocations: Array<{ participant: string; asset: string; amount: string }> = [];
 
     constructor(config: YellowServiceConfig) {
         super();
-        this.config = config;
+        this.config = {
+            ...config,
+            // Default to basic channels - App Sessions require both parties to be active signers
+            // Relayer is passive, so we use ERC20 transfer instead
+            useAppSessions: config.useAppSessions ?? false,
+            relayerAddress: config.relayerAddress ?? RELAYER_ADDRESS,
+        };
         this.authState = createInitialAuthState();
         this.sessionManager = new SessionManager();
     }
@@ -240,6 +256,15 @@ export class YellowService extends EventEmitter {
 
     /**
      * Start a new listening session
+     *
+     * With App Sessions (default):
+     * - Creates a 2-party session between user and relayer
+     * - User deposits funds, relayer starts with 0
+     * - On close, funds are split based on spending
+     *
+     * With Basic Channels (legacy):
+     * - Creates a channel with ClearNode
+     * - Requires manual transfer to relayer on close
      */
     async startSession(depositAmount: bigint): Promise<SessionState> {
         if (!this.ws || !this.authState.isAuthenticated || !this.clients || !this.sessionKeyPair) {
@@ -248,27 +273,130 @@ export class YellowService extends EventEmitter {
 
         this.sessionManager.setStatus('starting');
 
-        // Request ledger balances to get channels
-        await requestLedgerBalances(
-            this.ws,
-            this.sessionKeyPair,
-            this.clients.account.address
-        );
+        if (this.config.useAppSessions) {
+            // App Sessions mode - 2-party session with relayer
+            return this.startAppSessionMode(depositAmount);
+        } else {
+            // Legacy basic channel mode
+            return this.startBasicChannelMode(depositAmount);
+        }
+    }
 
-        // Wait for channels response
-        const channels = await this.waitForChannels();
-        const existingChannel = findOpenChannel(channels);
+    /**
+     * Start session using App Sessions (2-party with relayer)
+     */
+    private async startAppSessionMode(depositAmount: bigint): Promise<SessionState> {
+        if (!this.ws || !this.clients || !this.sessionKeyPair) {
+            throw new Error('Not ready');
+        }
+
+        const userAddress = this.clients.account.address;
+        const relayerAddress = this.config.relayerAddress!;
+
+        console.log('\n[Starting App Session]');
+        console.log(`  Mode: App Sessions (2-party)`);
+        console.log(`  User: ${userAddress}`);
+        console.log(`  Relayer: ${relayerAddress}`);
+        console.log(`  Deposit: ${formatUSDCDisplay(depositAmount)}`);
+
+        // Check initial balances
+        const walletBefore = await getTokenBalance(this.clients.publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
+        const custodyBefore = await this.clients.nitroliteClient.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+
+        console.log('\n  Initial balances:');
+        console.log(`    User wallet: ${formatUSDCDisplay(walletBefore)}`);
+        console.log(`    User custody: ${formatUSDCDisplay(custodyBefore)}`);
+
+        // Start App Session (handles deposit if needed)
+        const sessionResult = await startAppSession({
+            ws: this.ws,
+            client: this.clients.nitroliteClient,
+            publicClient: this.clients.publicClient,
+            sessionKeyPair: this.sessionKeyPair,
+            userAddress,
+            relayerAddress,
+            depositAmount,
+        });
+
+        // Store server-confirmed state (like reference code does)
+        this.appSessionId = sessionResult.appSessionId;
+        this.appSessionVersion = sessionResult.version;
+        this.appSessionAllocations = sessionResult.allocations;
+
+        // DEBUG: Log what we stored
+        console.log('\n  [DEBUG] Stored session state:');
+        console.log('    appSessionId:', this.appSessionId);
+        console.log('    appSessionVersion:', this.appSessionVersion);
+        console.log('    appSessionAllocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+
+        // If allocations are empty, initialize them with expected values
+        if (this.appSessionAllocations.length === 0) {
+            console.log('    [WARNING] Server returned empty allocations, initializing locally');
+            this.appSessionAllocations = [
+                { participant: userAddress, asset: 'ytest.usd', amount: depositAmount.toString() },
+                { participant: relayerAddress, asset: 'ytest.usd', amount: '0' },
+            ];
+            console.log('    Initialized allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+        }
+
+        const { depositTxHash } = sessionResult;
+
+        if (depositTxHash) {
+            console.log(`  Deposit TX: ${depositTxHash}`);
+        }
+
+        // Check balances after App Session creation
+        const walletAfter = await getTokenBalance(this.clients.publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
+        const custodyAfter = await this.clients.nitroliteClient.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+
+        console.log('\n  Balances after session start:');
+        console.log(`    User wallet: ${formatUSDCDisplay(walletAfter)}`);
+        console.log(`    User custody: ${formatUSDCDisplay(custodyAfter)} (should be 0, funds in session)`);
+
+        // Start session tracking (use appSessionId as channelId for compatibility)
+        this.sessionManager.startSession(this.appSessionId, depositAmount);
+
+        const state = this.sessionManager.getState();
+        this.emit('session:started', state);
+        this.emit('channel:created', this.appSessionId);
+        this.emit('channel:funded', this.appSessionId, depositAmount);
+
+        console.log(`\n✓ App Session started: ${this.appSessionId}`);
+
+        return state;
+    }
+
+    /**
+     * Start session using basic channels (legacy mode)
+     */
+    private async startBasicChannelMode(depositAmount: bigint): Promise<SessionState> {
+        if (!this.ws || !this.clients || !this.sessionKeyPair) {
+            throw new Error('Not ready');
+        }
+
+        // Check for existing open channels using NitroliteClient (more reliable)
+        console.log('  Checking for existing channels...');
+        const openChannels = await this.clients.nitroliteClient.getOpenChannels();
+        console.log(`  Found ${openChannels.length} open channel(s)`);
 
         let channelId: `0x${string}`;
 
-        if (existingChannel) {
+        if (openChannels.length > 0) {
             // Use existing channel
-            channelId = existingChannel.channel_id;
-            console.log('Using existing channel:', channelId);
+            channelId = openChannels[0];
+            console.log('  Using existing channel:', channelId);
+
+            // Check if channel has balance
+            const channelBalance = await this.clients.nitroliteClient.getChannelBalance(
+                channelId,
+                DEFAULT_TOKEN_ADDRESS
+            );
+            console.log(`  Channel balance: ${formatUSDCDisplay(channelBalance)}`);
         } else {
-            // Create new channel
+            // Create new channel via WebSocket
+            console.log('  No existing channels, creating new one...');
             channelId = await this.createNewChannel();
-            console.log('Created new channel:', channelId);
+            console.log('  Created new channel:', channelId);
         }
 
         // Wait for node to index the channel
@@ -289,17 +417,14 @@ export class YellowService extends EventEmitter {
     /**
      * End the current session and settle payments
      *
-     * Flow:
-     * 1. Close Yellow channel with fundsDestination = USER (listener)
-     * 2. All channel funds go to user's custody balance
-     * 3. User withdraws from custody to get ERC20 tokens
-     * 4. User sends spent amount to relayer via ERC20 transfer
-     * 5. User keeps the remaining amount (refund)
+     * With App Sessions (default):
+     * - Closes with explicit allocations: user gets refund, relayer gets spent
+     * - Funds go directly to respective custody balances
+     * - User withdraws refund, relayer withdraws payment (separately)
+     * - All on-chain, verifiable on Etherscan
      *
-     * This ensures:
-     * - User maintains control of their funds
-     * - Relayer receives actual on-chain tokens for artist payments
-     * - Simple trust model (user only sends what they owe)
+     * With Basic Channels (legacy):
+     * - Close channel → user custody → withdraw → ERC20 transfer to relayer
      */
     async endSession(): Promise<SettlementResult> {
         if (!this.sessionManager.isActive()) {
@@ -317,6 +442,145 @@ export class YellowService extends EventEmitter {
             this.sessionManager.stopCurrentPlay();
         }
 
+        if (this.config.useAppSessions && this.appSessionId) {
+            return this.endAppSessionMode();
+        } else {
+            return this.endBasicChannelMode();
+        }
+    }
+
+    /**
+     * End session using App Sessions - proper fund distribution
+     */
+    private async endAppSessionMode(): Promise<SettlementResult> {
+        if (!this.ws || !this.clients || !this.sessionKeyPair || !this.appSessionId) {
+            throw new Error('Not ready');
+        }
+
+        const userAddress = this.clients.account.address;
+        const relayerAddress = this.config.relayerAddress!;
+
+        // Get session amounts
+        const totalSpent = this.sessionManager.getTotalSpent();
+        const depositAmount = this.sessionManager.getState().depositAmount;
+        const refundAmount = depositAmount - totalSpent;
+
+        // Get listening activity BEFORE ending session (while data is still available)
+        const listeningActivity = this.sessionManager.getListeningActivity();
+
+        console.log('\n' + '='.repeat(60));
+        console.log('SESSION SETTLEMENT (App Sessions)');
+        console.log('='.repeat(60));
+        console.log(`  App Session ID: ${this.appSessionId}`);
+        console.log(`  User: ${userAddress}`);
+        console.log(`  Relayer: ${relayerAddress}`);
+        console.log('');
+        console.log('  Fund Distribution:');
+        console.log(`    Total deposited: ${formatUSDCDisplay(depositAmount)}`);
+        console.log(`    Total spent: ${formatUSDCDisplay(totalSpent)}`);
+        console.log(`    User refund: ${formatUSDCDisplay(refundAmount)}`);
+        console.log(`    Relayer payment: ${formatUSDCDisplay(totalSpent)}`);
+        console.log('');
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
+        }
+
+        // Check balances BEFORE close
+        const walletBefore = await getTokenBalance(this.clients.publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
+        const userCustodyBefore = await this.clients.nitroliteClient.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+
+        console.log('\n  Balances BEFORE close:');
+        console.log(`    User wallet: ${formatUSDCDisplay(walletBefore)}`);
+        console.log(`    User custody: ${formatUSDCDisplay(userCustodyBefore)}`);
+
+        // End App Session with proper fund distribution
+        const result = await endAppSession({
+            ws: this.ws,
+            client: this.clients.nitroliteClient,
+            publicClient: this.clients.publicClient,
+            walletClient: this.clients.walletClient,
+            sessionKeyPair: this.sessionKeyPair,
+            appSessionId: this.appSessionId,
+            userAddress,
+            relayerAddress,
+            totalSpent,
+            depositAmount,
+            listeningActivity,
+        });
+
+        // Check balances AFTER close and withdrawal
+        const walletAfter = await getTokenBalance(this.clients.publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
+        const userCustodyAfter = await this.clients.nitroliteClient.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+
+        console.log('\n  Balances AFTER settlement:');
+        console.log(`    User wallet: ${formatUSDCDisplay(walletAfter)}`);
+        console.log(`    User custody: ${formatUSDCDisplay(userCustodyAfter)} (should be 0)`);
+        console.log(`    Relayer received: ${formatUSDCDisplay(result.relayerReceived)} (in relayer custody)`);
+
+        // Verify the math
+        const walletChange = walletAfter - walletBefore;
+        console.log('\n  Verification:');
+        console.log(`    User wallet change: ${formatUSDCDisplay(walletChange)}`);
+        console.log(`    Expected refund: ${formatUSDCDisplay(refundAmount)}`);
+
+        this.emit('channel:closed', this.appSessionId, result.userWithdrawTxHash || ('0x' as `0x${string}`));
+
+        // Generate session summary
+        const summary = this.sessionManager.endSession();
+        this.emit('session:ended', summary);
+
+        // Reset
+        const appSessionId = this.appSessionId;
+        this.appSessionId = null;
+        this.appSessionVersion = 1;
+        this.sessionManager.reset();
+
+        console.log('\n' + '='.repeat(60));
+        console.log('SETTLEMENT COMPLETE');
+        console.log('='.repeat(60));
+        console.log(`  User received: ${formatUSDCDisplay(refundAmount)} (in wallet)`);
+        console.log(`  Relayer received: ${formatUSDCDisplay(totalSpent)} (in custody, ready to withdraw)`);
+        console.log(`  User custody: 0 (empty)`);
+        console.log('');
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
+        }
+        console.log('');
+        console.log('  All transactions on-chain and verifiable on Etherscan');
+        console.log('='.repeat(60));
+
+        return {
+            success: true,
+            transfers: [], // No longer tracking individual artist transfers here
+            closeTxHash: appSessionId, // Use appSessionId as reference
+            refundAmount,
+            withdrawTxHash: result.userWithdrawTxHash || null,
+            relayerTransfer: {
+                success: true,
+                destination: relayerAddress,
+                amount: totalSpent,
+                timestamp: Date.now(),
+            },
+            sessionInfo: {
+                userAddress,
+                depositAmount,
+                totalSpent,
+                refundDue: refundAmount,
+            },
+            listeningActivity, // Key data for relayer to distribute to artists
+        };
+    }
+
+    /**
+     * End session using basic channels (legacy mode)
+     */
+    private async endBasicChannelMode(): Promise<SettlementResult> {
+        if (!this.ws || !this.clients || !this.sessionKeyPair) {
+            throw new Error('Not ready');
+        }
+
         const channelId = this.sessionManager.getChannelId();
         if (!channelId) {
             throw new Error('No channel ID in session');
@@ -326,22 +590,51 @@ export class YellowService extends EventEmitter {
         const totalSpent = this.sessionManager.getTotalSpent();
         const depositAmount = this.sessionManager.getState().depositAmount;
         const refundAmount = depositAmount - totalSpent;
-        const artistTotals = this.sessionManager.getArtistTotals();
         const userAddress = this.clients.account.address;
 
-        console.log('\n[Session Settlement]');
+        // Get listening activity BEFORE ending session (while data is still available)
+        const listeningActivity = this.sessionManager.getListeningActivity();
+
+        console.log('\n[Session Settlement - Basic Channel Mode]');
         console.log(`  User: ${userAddress}`);
         console.log(`  Total deposited: ${formatUSDCDisplay(depositAmount)}`);
         console.log(`  Total spent: ${formatUSDCDisplay(totalSpent)}`);
         console.log(`  Refund (user keeps): ${formatUSDCDisplay(refundAmount)}`);
         console.log(`  Payment to relayer: ${formatUSDCDisplay(totalSpent)}`);
-        console.log(`  Artists to pay: ${artistTotals.size}`);
-        for (const [address, amount] of artistTotals) {
-            console.log(`    - ${address}: ${formatUSDCDisplay(amount)}`);
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
         }
 
         // Step 1: Close channel with funds going to USER
         console.log('\n[Step 1] Closing channel (funds → user custody)...');
+
+        // Log balances BEFORE close
+        const custodyAddress = CONTRACT_ADDRESSES.sepolia.custody;
+        const channelBalanceBefore = await getChannelBalance(
+            this.clients.publicClient,
+            custodyAddress,
+            channelId,
+            DEFAULT_TOKEN_ADDRESS
+        );
+        const custodyBalanceBefore = await getUserCustodyBalance(
+            this.clients.publicClient,
+            custodyAddress,
+            userAddress,
+            DEFAULT_TOKEN_ADDRESS
+        );
+        const walletBalanceBefore = await getTokenBalance(
+            this.clients.publicClient,
+            DEFAULT_TOKEN_ADDRESS,
+            userAddress
+        );
+        console.log('  Balances BEFORE close:');
+        console.log(`    Channel balance: ${channelBalanceBefore} units (${formatUSDCDisplay(channelBalanceBefore)})`);
+        console.log(`    User custody balance: ${custodyBalanceBefore} units (${formatUSDCDisplay(custodyBalanceBefore)})`);
+        console.log(`    User wallet (ERC20): ${walletBalanceBefore} units (${formatUSDCDisplay(walletBalanceBefore)})`);
+
+        // Log on-chain channel state before close
+        await logOnChainChannelState(this.clients.nitroliteClient, channelId);
 
         // Wait for channel state to settle before closing
         await new Promise(r => setTimeout(r, 2000));
@@ -356,6 +649,13 @@ export class YellowService extends EventEmitter {
         // Wait for ClearNode confirmation
         const closeResponse = await waitForCloseConfirmation(this.ws, channelId);
 
+        // Log the allocations to understand fund distribution
+        console.log('  Close response allocations:');
+        for (const alloc of closeResponse.state.allocations) {
+            const isUser = alloc.destination.toLowerCase() === userAddress.toLowerCase();
+            console.log(`    ${isUser ? '→ USER' : '→ SERVER'}: ${formatUSDCDisplay(BigInt(alloc.amount))} (${alloc.destination.slice(0, 10)}...)`);
+        }
+
         // Submit close to blockchain
         const closeTxHash = await submitCloseToBlockchain(
             this.clients.nitroliteClient,
@@ -364,6 +664,42 @@ export class YellowService extends EventEmitter {
         );
 
         console.log(`✓ Channel closed: ${closeTxHash}`);
+
+        // Wait for close to settle on-chain
+        console.log('  Waiting for close to settle...');
+        await new Promise(r => setTimeout(r, 10000));
+
+        // Log balances AFTER close
+        const channelBalanceAfter = await getChannelBalance(
+            this.clients.publicClient,
+            custodyAddress,
+            channelId,
+            DEFAULT_TOKEN_ADDRESS
+        );
+        const custodyBalanceAfter = await getUserCustodyBalance(
+            this.clients.publicClient,
+            custodyAddress,
+            userAddress,
+            DEFAULT_TOKEN_ADDRESS
+        );
+        const walletBalanceAfter = await getTokenBalance(
+            this.clients.publicClient,
+            DEFAULT_TOKEN_ADDRESS,
+            userAddress
+        );
+        console.log('  Balances AFTER close:');
+        console.log(`    Channel balance: ${channelBalanceAfter} units (${formatUSDCDisplay(channelBalanceAfter)})`);
+        console.log(`    User custody balance: ${custodyBalanceAfter} units (${formatUSDCDisplay(custodyBalanceAfter)})`);
+        console.log(`    User wallet (ERC20): ${walletBalanceAfter} units (${formatUSDCDisplay(walletBalanceAfter)})`);
+
+        // Calculate what we expect vs what we got
+        const expectedInCustody = BigInt(closeResponse.state.allocations.find(a =>
+            a.destination.toLowerCase() === userAddress.toLowerCase()
+        )?.amount || '0');
+        console.log(`  Expected in custody: ${expectedInCustody} units`);
+        console.log(`  Actual custody change: ${custodyBalanceAfter - custodyBalanceBefore} units`);
+        console.log(`  Actual wallet change: ${walletBalanceAfter - walletBalanceBefore} units`);
+
         this.emit('channel:closed', channelId, closeTxHash);
 
         // Step 2: Withdraw from custody
@@ -422,17 +758,6 @@ export class YellowService extends EventEmitter {
             console.log('\n[Step 3] No payment needed (nothing spent)');
         }
 
-        // Build transfer results (for reporting artist distributions)
-        const transfers: TransferResult[] = [];
-        for (const [address, amount] of artistTotals) {
-            transfers.push({
-                success: true,
-                destination: address,
-                amount,
-                timestamp: Date.now(),
-            });
-        }
-
         // Generate session summary
         const summary = this.sessionManager.endSession();
         this.emit('session:ended', summary);
@@ -443,11 +768,15 @@ export class YellowService extends EventEmitter {
         console.log('\n[Settlement Complete]');
         console.log(`  User keeps: ${formatUSDCDisplay(refundAmount)}`);
         console.log(`  Relayer received: ${formatUSDCDisplay(totalSpent)}`);
-        console.log(`  Relayer will distribute to ${artistTotals.size} artists`);
+        console.log('');
+        console.log(`  Listening Activity (${listeningActivity.length} songs):`);
+        for (const record of listeningActivity) {
+            console.log(`    - songListened: ${record.songListened}, amountSpent: ${formatUSDCDisplay(record.amountSpent)}`);
+        }
 
         return {
             success: true,
-            transfers,
+            transfers: [], // No longer tracking individual artist transfers
             closeTxHash,
             refundAmount,
             withdrawTxHash,
@@ -458,6 +787,7 @@ export class YellowService extends EventEmitter {
                 totalSpent,
                 refundDue: refundAmount,
             },
+            listeningActivity, // Key data for relayer to distribute to artists
         };
     }
 
@@ -486,10 +816,19 @@ export class YellowService extends EventEmitter {
 
     /**
      * Start playing a song
+     * If there's a current play, this triggers an off-chain microtransaction
+     * to record payment for the previous song before starting the new one
      */
-    startPlay(song: Song): void {
+    async startPlay(song: Song): Promise<void> {
         if (!this.sessionManager.isActive()) {
             throw new Error('No active session');
+        }
+
+        // Check if there's a current play (user is switching songs)
+        const currentPlay = this.sessionManager.getCurrentPlay();
+        if (currentPlay && currentPlay.totalCost > 0n) {
+            // Submit off-chain microtransaction for the previous song
+            await this.submitMicrotransaction();
         }
 
         this.sessionManager.startPlay(song);
@@ -497,12 +836,143 @@ export class YellowService extends EventEmitter {
     }
 
     /**
-     * Stop the current play
+     * Stop the current play and optionally submit microtransaction
      */
-    stopPlay(): PlayEvent | null {
+    async stopPlay(): Promise<PlayEvent | null> {
+        const currentPlay = this.sessionManager.getCurrentPlay();
+
+        // Submit microtransaction before stopping if there's cost
+        if (currentPlay && currentPlay.totalCost > 0n && this.config.useAppSessions && this.appSessionId) {
+            await this.submitMicrotransaction();
+        }
+
         const playEvent = this.sessionManager.stopCurrentPlay();
         this.emit('session:updated', this.sessionManager.getState());
         return playEvent;
+    }
+
+    /**
+     * Submit an off-chain microtransaction (state update)
+     * This is called when switching songs to record payment for the current song
+     *
+     * IMPORTANT: Uses server-confirmed allocations (like reference code)
+     * - Start from last confirmed allocations
+     * - Apply delta (song cost: subtract from user, add to relayer)
+     * - Update allocations from server response
+     */
+    private async submitMicrotransaction(): Promise<void> {
+        if (!this.config.useAppSessions || !this.appSessionId) {
+            return; // Only for App Sessions mode
+        }
+
+        if (!this.ws || !this.sessionKeyPair || !this.clients) {
+            return;
+        }
+
+        const currentPlay = this.sessionManager.getCurrentPlay();
+        if (!currentPlay || currentPlay.totalCost === 0n) {
+            return;
+        }
+
+        // Capture song cost BEFORE stopping (stopCurrentPlay adds to totalSpent)
+        const songCost = currentPlay.totalCost;
+
+        // Stop current play to finalize cost calculation
+        this.sessionManager.stopCurrentPlay();
+
+        const userAddress = this.clients.account.address;
+        const relayerAddress = this.config.relayerAddress!;
+
+        // DEBUG: Log what we have
+        console.log('\n  [DEBUG] App Session Allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+        console.log('  [DEBUG] Looking for userAddress:', userAddress);
+        console.log('  [DEBUG] Looking for relayerAddress:', relayerAddress);
+
+        // FIX: More robust allocation finding
+        let currentUserBalance: bigint;
+        let currentRelayerBalance: bigint;
+
+        const userAlloc = this.appSessionAllocations.find(
+            a => a.participant.toLowerCase() === userAddress.toLowerCase()
+        );
+        const relayerAlloc = this.appSessionAllocations.find(
+            a => a.participant.toLowerCase() === relayerAddress.toLowerCase()
+        );
+
+        console.log('  [DEBUG] Found userAlloc:', userAlloc);
+        console.log('  [DEBUG] Found relayerAlloc:', relayerAlloc);
+
+        // Use allocations if found, otherwise use deposit amount as starting point
+        if (userAlloc && userAlloc.amount) {
+            currentUserBalance = BigInt(userAlloc.amount);
+        } else {
+            // Fallback: use deposit minus PREVIOUS spending (exclude current song since we'll subtract it below)
+            // Note: getTotalSpent() now includes songCost since stopCurrentPlay() was called
+            const totalSpentBeforeThisSong = this.sessionManager.getTotalSpent() - songCost;
+            currentUserBalance = this.sessionManager.getState().depositAmount - totalSpentBeforeThisSong;
+            console.log('  [WARNING] No userAlloc found, using deposit - previous spent:', formatUSDCDisplay(currentUserBalance));
+        }
+
+        if (relayerAlloc && relayerAlloc.amount) {
+            currentRelayerBalance = BigInt(relayerAlloc.amount);
+        } else {
+            // Fallback: relayer has received PREVIOUS spending (exclude current song)
+            currentRelayerBalance = this.sessionManager.getTotalSpent() - songCost;
+            console.log('  [WARNING] No relayerAlloc found, using previous totalSpent:', formatUSDCDisplay(currentRelayerBalance));
+        }
+
+        // Calculate new allocations by applying delta (song cost already captured above)
+        const newUserBalance = currentUserBalance - songCost;
+        const newRelayerBalance = currentRelayerBalance + songCost;
+
+        // Increment version for this state update
+        this.appSessionVersion++;
+
+        console.log(`\n  [Song Switch - Microtransaction v${this.appSessionVersion}]`);
+        console.log(`    Song: ${currentPlay.songId}`);
+        console.log(`    Cost: ${formatUSDCDisplay(songCost)}`);
+        console.log(`    Previous: user=${formatUSDCDisplay(currentUserBalance)}, relayer=${formatUSDCDisplay(currentRelayerBalance)}`);
+        console.log(`    New: user=${formatUSDCDisplay(newUserBalance)}, relayer=${formatUSDCDisplay(newRelayerBalance)}`);
+
+        try {
+            const result = await submitAppState({
+                ws: this.ws,
+                sessionKeyPair: this.sessionKeyPair,
+                appSessionId: this.appSessionId,
+                userAddress,
+                relayerAddress,
+                userBalance: newUserBalance,
+                relayerBalance: newRelayerBalance,
+                version: this.appSessionVersion,
+            });
+
+            // Update allocations from server response (like reference code)
+            if (result.success) {
+                // Update version from server response
+                if (result.version > this.appSessionVersion) {
+                    this.appSessionVersion = result.version;
+                }
+
+                // Update allocations with correct asset from initial session
+                const asset = this.appSessionAllocations[0]?.asset || 'ytest.usd';
+                this.appSessionAllocations = [
+                    { participant: userAddress, asset, amount: newUserBalance.toString() },
+                    { participant: relayerAddress, asset, amount: newRelayerBalance.toString() },
+                ];
+
+                console.log(`    ✓ Server confirmed v${this.appSessionVersion}`);
+                console.log('    Updated allocations:', JSON.stringify(this.appSessionAllocations, null, 2));
+            }
+
+            this.emit('transfer:completed', {
+                success: true,
+                destination: relayerAddress,
+                amount: songCost,
+                timestamp: Date.now(),
+            });
+        } catch (err) {
+            console.log(`    ⚠ Microtransaction failed: ${err}`);
+        }
     }
 
     /**
@@ -510,7 +980,6 @@ export class YellowService extends EventEmitter {
      */
     recordPlay(
         songId: string,
-        artistAddress: Address,
         durationSeconds: number,
         pricePerSecond: bigint
     ): PlayEvent {
@@ -520,7 +989,6 @@ export class YellowService extends EventEmitter {
 
         const playEvent = this.sessionManager.recordPlay(
             songId,
-            artistAddress,
             durationSeconds,
             pricePerSecond
         );
@@ -597,23 +1065,6 @@ export class YellowService extends EventEmitter {
         });
     }
 
-    private async waitForChannels(): Promise<Channel[]> {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                this.messageHandlers.delete('get_ledger_balances');
-                reject(new Error('Channels request timeout'));
-            }, TIMING.wsMessageTimeout);
-
-            // The ledger balances response includes channels
-            this.messageHandlers.set('get_ledger_balances', (data: unknown) => {
-                clearTimeout(timeout);
-                this.messageHandlers.delete('get_ledger_balances');
-                const response = data as { channels?: Channel[] };
-                resolve(response.channels || []);
-            });
-        });
-    }
-
     private async createNewChannel(): Promise<`0x${string}`> {
         if (!this.ws || !this.sessionKeyPair || !this.token || !this.clients) {
             throw new Error('Not ready to create channel');
@@ -678,7 +1129,7 @@ export class YellowService extends EventEmitter {
             throw new Error('Not ready to fund channel');
         }
 
-        const result = await fundChannel({
+        await fundChannel({
             ws: this.ws,
             client: this.clients.nitroliteClient,
             publicClient: this.clients.publicClient,

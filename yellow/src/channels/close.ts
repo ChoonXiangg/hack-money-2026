@@ -3,8 +3,34 @@ import type { PublicClient, Address, Hash } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
 import type { CloseChannelResponse } from '../types';
-import { TIMING } from '../config';
+import { TIMING, formatUSDCDisplay } from '../config';
 import { getUserCustodyBalance } from './create';
+
+// ============================================================================
+// Channel State Helpers
+// ============================================================================
+
+/**
+ * Get on-chain channel state for debugging
+ */
+export async function logOnChainChannelState(
+    client: NitroliteClient,
+    channelId: `0x${string}`
+): Promise<void> {
+    try {
+        const data = await client.getChannelData(channelId);
+        console.log('  On-chain channel state:');
+        console.log(`    Status: ${data.status}`);
+        console.log(`    Challenge expiry: ${data.challengeExpiry}`);
+        console.log(`    Last valid state version: ${data.lastValidState.version}`);
+        console.log(`    Allocations:`);
+        for (const alloc of data.lastValidState.allocations) {
+            console.log(`      ${alloc.destination.slice(0, 10)}...: ${formatUSDCDisplay(alloc.amount)}`);
+        }
+    } catch (err) {
+        console.log(`  Could not get on-chain channel state: ${err}`);
+    }
+}
 
 // ============================================================================
 // Close Channel
@@ -51,6 +77,15 @@ export function waitForCloseConfirmation(
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+                // Check for error response first (critical: msg.res[1] === 'error')
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(errorMsg));
+                    return;
+                }
                 if (msg.res && msg.res[1] === 'close_channel') {
                     const payload = msg.res[2];
                     if (payload.channel_id === channelId) {

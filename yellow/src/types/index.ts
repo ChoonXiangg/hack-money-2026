@@ -133,6 +133,42 @@ export interface CloseChannelResponse {
 }
 
 // ============================================================================
+// App Session Types (for 2-party sessions with explicit fund distribution)
+// ============================================================================
+
+export interface AppSessionAllocation {
+    participant: Address;
+    asset: string;
+    amount: string;
+}
+
+export interface AppSessionDefinition {
+    application: string;
+    protocol: 'NitroRPC/0.2' | 'NitroRPC/0.4';
+    participants: Address[];
+    weights: number[];
+    quorum: number;
+    challenge: number;
+    nonce?: number;
+}
+
+export interface CreateAppSessionResponse {
+    app_session_id: `0x${string}`;
+    definition: AppSessionDefinition;
+    allocations: AppSessionAllocation[];
+    session_data?: string;
+}
+
+export interface CloseAppSessionResponse {
+    app_session_id: `0x${string}`;
+    allocations: AppSessionAllocation[];
+    final_state?: {
+        version: number;
+        allocations: AppSessionAllocation[];
+    };
+}
+
+// ============================================================================
 // Session Types
 // ============================================================================
 
@@ -181,13 +217,55 @@ export interface Artist {
     walletAddress: Address;
 }
 
+/** Collaborator as defined in songs.json */
+export interface Collaborator {
+    artistName: string;
+    address: Address;
+    blockchain: string;
+    percentage?: number;  // Optional - defaults to equal split
+}
+
+/** Song structure matching songs.json */
 export interface Song {
+    id: string;
+    songName: string;
+    pricePerSecond: string;  // String in JSON, convert to bigint when needed
+    collaborators: Collaborator[];
+    songFile?: string;
+    imageFile?: string;
+    createdAt?: string;
+}
+
+/** Legacy Song type for backwards compatibility */
+export interface LegacySong {
     id: string;
     title: string;
     artist: Artist;
     durationSeconds: number;
     pricePerSecond: bigint;
 }
+
+// ============================================================================
+// Listening Activity Types (for relayer payouts)
+// ============================================================================
+
+/** Individual song listening record - simple structure for relayer to calculate artist splits */
+export interface SongListeningRecord {
+    songListened: string;   // songId from songs.json
+    amountSpent: bigint;    // Total amount spent on this song
+}
+
+/**
+ * Complete listening activity for a session
+ * This is the key data structure passed to relayer for artist payouts
+ *
+ * Example output:
+ * [
+ *   { songListened: "song-1770332338689", amountSpent: 500n },
+ *   { songListened: "song-1770385109288", amountSpent: 300n },
+ * ]
+ */
+export type ListeningActivity = SongListeningRecord[];
 
 // ============================================================================
 // Service Types
@@ -222,6 +300,8 @@ export interface SettlementResult {
         totalSpent: bigint;
         refundDue: bigint;
     };
+    /** Listening activity for relayer to distribute to artists */
+    listeningActivity?: ListeningActivity;
 }
 
 // ============================================================================

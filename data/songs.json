@@ -1,0 +1,124 @@
+[
+  {
+    "id": "song-1770332338689",
+    "songName": "Dive By Night",
+    "pricePerSecond": "0.0001",
+    "collaborators": [
+      {
+        "artistName": "Trellion",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia"
+      },
+      {
+        "artistName": "Kendrick",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet"
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770332338689.mp3",
+    "imageFile": "/uploads/images/song-1770332338689.jpg",
+    "createdAt": "2026-02-05T22:58:58.706Z"
+  },
+  {
+    "id": "song-1770385109288",
+    "songName": "Muddy Track",
+    "pricePerSecond": "0.0002",
+    "collaborators": [
+      {
+        "artistName": "Trellion",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia"
+      },
+      {
+        "artistName": "Sniff",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet"
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770385109288.mp3",
+    "imageFile": "/uploads/images/song-1770385109288.jpg",
+    "createdAt": "2026-02-06T13:38:29.295Z"
+  },
+  {
+    "id": "song-1770385190002",
+    "songName": "Strange Lights",
+    "pricePerSecond": "0.0003",
+    "collaborators": [
+      {
+        "artistName": "Trellion",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia"
+      },
+      {
+        "artistName": "Figment",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet"
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770385190002.mp3",
+    "imageFile": "/uploads/images/song-1770385190002.jpg",
+    "createdAt": "2026-02-06T13:39:50.014Z"
+  },
+  {
+    "id": "song-1770385276914",
+    "songName": "Wasted in Stasis",
+    "pricePerSecond": "0.0004",
+    "collaborators": [
+      {
+        "artistName": "Trellion",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia"
+      },
+      {
+        "artistName": "Cole",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet"
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770385276914.mp3",
+    "imageFile": "/uploads/images/song-1770385276914.jpg",
+    "createdAt": "2026-02-06T13:41:16.923Z"
+  },
+  {
+    "id": "song-1770385351580",
+    "songName": "The Night The Fog Came",
+    "pricePerSecond": "0.0005",
+    "collaborators": [
+      {
+        "artistName": "Trellion",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia"
+      },
+      {
+        "artistName": "Figment",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet"
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770385351580.mp3",
+    "imageFile": "/uploads/images/song-1770385351580.jpg",
+    "createdAt": "2026-02-06T13:42:31.588Z"
+  },
+  {
+    "id": "song-1770401305669",
+    "songName": "Name",
+    "pricePerSecond": "0.001",
+    "collaborators": [
+      {
+        "artistName": "Artist",
+        "address": "0xda29bf5e13cc0a808baa3a435f4e3fbfece8bb6f",
+        "blockchain": "Ethereum_Sepolia",
+        "percentage": 80
+      },
+      {
+        "artistName": "Artist 2",
+        "address": "0x0f19f1f7e413af44b79e30c1cc4a07a25f4eee03",
+        "blockchain": "Arc_Testnet",
+        "percentage": 20
+      }
+    ],
+    "songFile": "/uploads/songs/song-1770401305669.mp3",
+    "imageFile": "/uploads/images/song-1770401305669.jpg",
+    "createdAt": "2026-02-06T18:08:25.674Z"
+  }
+]
