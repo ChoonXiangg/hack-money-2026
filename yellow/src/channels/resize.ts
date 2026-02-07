@@ -2,17 +2,90 @@ import {
     createResizeChannelMessage,
     NitroliteClient,
 } from '@erc7824/nitrolite';
-import type { PublicClient, Address, Hash } from 'viem';
+import type { PublicClient, Address, Hash, WalletClient } from 'viem';
+import { maxUint256 } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
 import type { ResizeChannelResponse } from '../types';
-import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS } from '../config';
+import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS, CONTRACT_ADDRESSES } from '../config';
 import { getChannelBalance } from './create';
 import { getTokenBalance } from './relayer';
+
+// ERC20 ABI for approve function
+const ERC20_ABI = [
+    {
+        name: 'approve',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ type: 'bool' }],
+    },
+    {
+        name: 'allowance',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+        ],
+        outputs: [{ type: 'uint256' }],
+    },
+] as const;
 
 // ============================================================================
 // Deposit to Custody
 // ============================================================================
+
+/**
+ * Approve ERC20 token spending for custody contract
+ */
+async function approveTokenIfNeeded(
+    walletClient: WalletClient,
+    publicClient: PublicClient,
+    tokenAddress: Address,
+    custodyAddress: Address,
+    amount: bigint
+): Promise<void> {
+    const userAddress = walletClient.account!.address;
+
+    // Check current allowance
+    const allowance = await publicClient.readContract({
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [userAddress, custodyAddress],
+    }) as bigint;
+
+    console.log(`  Current allowance: ${formatUSDCDisplay(allowance)}`);
+
+    // If allowance is insufficient, approve
+    if (allowance < amount) {
+        console.log(`  Approving ${formatUSDCDisplay(amount)} USDC for custody...`);
+
+        const approveTxHash = await walletClient.writeContract({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: 'approve',
+            args: [custodyAddress, maxUint256], // Approve max for future deposits
+        });
+
+        console.log(`  Approve TX: ${approveTxHash}`);
+
+        // Wait for approval confirmation
+        const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+
+        if (approveReceipt.status !== 'success') {
+            throw new Error(`Token approval failed: ${approveTxHash}`);
+        }
+
+        console.log(`  ✓ Token approved`);
+    } else {
+        console.log(`  ✓ Token already approved`);
+    }
+}
 
 /**
  * Deposit ERC20 tokens to custody contract
@@ -26,6 +99,14 @@ export async function depositToCustody(
 ): Promise<Hash> {
     console.log(`  Depositing ${formatUSDCDisplay(amount)} to custody...`);
 
+    // Get wallet client from NitroliteClient
+    const walletClient = (client as any).walletClient as WalletClient;
+    const custodyAddress = CONTRACT_ADDRESSES.sepolia.custody;
+
+    // Step 1: Approve token spending if needed
+    await approveTokenIfNeeded(walletClient, publicClient, tokenAddress, custodyAddress, amount);
+
+    // Step 2: Deposit to custody
     const txHash = await client.deposit(tokenAddress, amount);
     console.log(`  Deposit TX: ${txHash}`);
 
