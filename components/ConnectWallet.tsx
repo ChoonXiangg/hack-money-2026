@@ -143,11 +143,10 @@ export default function ConnectWallet() {
     return (
       <div className="min-w-[240px]">
         <HoverBorderGradient
-          containerClassName="rounded-full w-full"
+          containerClassName={`rounded-full w-full ${isConnecting ? 'pointer-events-none opacity-70' : ''}`}
           as="button"
           className="bg-black text-white flex items-center justify-center w-full font-[family-name:var(--font-climate)] text-sm px-5 py-3"
           onClick={connectMetaMask}
-          disabled={isConnecting}
         >
           {isConnecting ? (
             <span className="flex items-center gap-2">
