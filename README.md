@@ -1,483 +1,453 @@
-# 🎵 LeStream: The Economic OS for Music Streaming
+# LeStream - Decentralized Music Streaming with Instant Micropayments
 
-> **HackMoney 2026 Submission**  
-> *Seamless Streaming. Instant Royalties.*  
-> 🌍 **Live Demo**: [hack-money-2026-steel.vercel.app](https://hack-money-2026-steel.vercel.app)
+> **A Music Streaming Platform Powered by Yellow Network, Circle Gateway, and ENS**
 
----
-
-## 📸 Screenshots
-
-| Landing Page | Listen to Music |
-| :---: | :---: |
-| ![Landing Page](images/Screenshot%202026-02-08%20at%2008.02.23.png) | ![Stream Credits](images/Screenshot%202026-02-08%20at%2008.03.24.png) |
-
-| Deposit Funds & Menu | Upload Song |
-| :---: | :---: |
-| ![Deposit Flow](images/Screenshot%202026-02-08%20at%2008.02.50.png) | ![Pay Per Second](images/Screenshot%202026-02-08%20at%2008.03.03.png) |
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://hack-money-2026-git-yz-frontend-choonxianggs-projects.vercel.app)
+[![ETHGlobal HackMoney 2026](https://img.shields.io/badge/ETHGlobal-HackMoney%202026-blue)](https://ethglobal.com)
+[![Yellow Network](https://img.shields.io/badge/Yellow-Network-yellow)](https://yellow.org)
+[![Circle](https://img.shields.io/badge/Circle-Gateway-00D4FF)](https://developers.circle.com/gateway)
+[![ENS](https://img.shields.io/badge/ENS-Integrated-5284FF)](https://ens.domains)
 
 ---
 
-## 📚 Table of Contents
+## 🎵 Overview
 
-1.  [Overview](#-overview)
-2.  [The Problem](#-the-problem)
-3.  [The Solution](#-the-solution)
-4.  [Architecture](#-architecture)
-5.  [Core Integrations](#-core-integrations)
-    *   [Yellow Network Integration](#1-yellow-network-integration-latency--fees)
-    *   [Circle Arc Integration](#2-circle-arc-integration-liquidity--splits)
-6.  [Technical Deep Dive](#-technical-deep-dive)
-    *   [Yellow Backend API (State Channels)](#yellow-backend-api-state-channels)
-    *   [Arc Scripts (Royalty Distribution)](#arc-scripts-royalty-distribution)
-7.  [Installation & Setup](#-installation--setup)
-8.  [Running the Application](#-running-the-application)
-9.  [Demo Walkthrough](#-demo-walkthrough)
-10. [Troubleshooting](#-troubleshooting)
-11. [Security Considerations](#-security-considerations)
-12. [Deployment](#-deployment)
-13. [Future Roadmap](#-future-roadmap)
-14. [Contributing](#-contributing)
-15. [License](#-license)
-16. [Acknowledgements](#-acknowledgements)
+LeStream is a decentralized music streaming platform that enables **real-time, per-second micropayments** to artists using state channel technology.
+
+### The Problem
+
+1. **Delayed Payments**: Artists wait 30-90 days for royalties
+2. **High Transaction Fees**: On-chain payments per stream cost more than the stream itself
+3. **No Blockchain Choice**: Artists locked into platform's chain
+4. **Complex Royalty Splits**: Collaborators struggle to receive fair shares
+
+### Our Solution
+
+| Technology | Purpose |
+|------------|---------|
+| **Yellow Network (Nitrolite)** | Off-chain state channels for instant, gasless micropayments |
+| **Circle Gateway** | Cross-chain USDC transfers to artist's preferred blockchain |
+| **ENS** | Human-readable identities with stored blockchain preferences |
 
 ---
 
-## 🚀 Overview
+## 🚀 Key Features
 
-**LeStream** reimagines the music streaming economy by solving its three biggest problems: **Latency** and **Liquidity**.
+### For Listeners
+- **Gasless Streaming**: No transaction fees while listening
+- **Pay-Per-Second**: Only pay for what you actually listen to
+- **Session-Based Payments**: Sign ONE on-chain transaction when you stop listening
+- **Web2-Like Experience**: Feels exactly like Spotify, but decentralized
 
-Legacy streaming platforms are black boxes. Artists wait months for pennies, and payments are eaten by middlemen. Pro-rata payout models mean that even if you only listen to your favorite indie band, your subscription fee mostly goes to the top 1% of global artists.
-
-**LeStream changes the rules.**
-
-By combining the speed of **Yellow Network**'s state channels and the programmable liquidity of **Circle Arc**, we've built a platform where:
-
-1.  **Users** pay strictly for what they listen to (per second) without gas fees.
-2.  **Artists** get paid instantly (per second) with automated royalty splits.
-
----
-
-## 🛑 The Problem
-
-### 1. The Payment Latency Crisis
-In the current music industry, there is a massive disconnect between consumption and compensation.
-*   **Users** pay a monthly subscription fee (e.g., $10/month).
-*   **Platforms** aggregate these fees into a giant pool.
-*   **Artists** are paid out months later (often 3-6 months), based on opaque "pro-rata" models.
-*   **Result**: Cash flow for artists is unpredictable.
-
-### 2. High Transaction Costs vs. Micro-Payments
-True "pay-as-you-go" streaming has been impossible because micro-transactions on-chain are infeasible.
-*   A song lasts 3 minutes. Paying $0.0001 per second on Ethereum Mainnet would cost $5.00 in gas fees **per second**.
-*   Even L2s, while cheaper, introduce latency (2-14 seconds) that breaks the smooth "stream-to-pay" user flow. You cannot sign a transaction for every second of audio.
+### For Artists
+- **Instant Revenue**: Receive payments when listeners finish their session
+- **Choose Your Blockchain**: Select preferred chain (Arc, Ethereum, Base, Avalanche)
+- **Custom Royalty Splits**: Define percentage-based splits for collaborators
+- **ENS Integration**: Store payout preferences in your ENS profile
 
 ---
 
-## 💡 The Solution
+## 🎯 How It Works
 
-**LeStream** creates a real-time, transparent value flow:
+### Phase 1: Session Start (One On-Chain Transaction)
+1. Connect your Web3 wallet
+2. Deposit USDC into Yellow Network state channel
+3. Session created with your deposit
+4. Start listening immediately
 
-### 1. Pay-Per-Second (State Channels)
-We use **Yellow Network** to open a high-speed payment channel between the listener and the platform.
-*   **Deposit**: User locks 10 USDC into a smart contract vault.
-*   **Stream**: Every second of audio played generates a cryptographically signed "state update" off-chain.
-*   **Settle**: When the user pauses or leaves, only the **final balance** is written to the blockchain. This reduces 10,000 potential transactions to just 2 (open & close).
+### Phase 2: Active Listening (All Off-Chain)
+While streaming, micropayments happen entirely off-chain:
 
-### 2. Instant Splits (Programmable Liquidity)
-We use **Circle Arc** as a sophisticated clearing house for the platform's revenue.
-*   Revenue settled from state channels is instantly routed to an Arc Developer Controlled Wallet.
-*   Smart logic automatically splits payments based on **artist-defined rules**:
-    *   **Custom Splits**: Artists configure their own percentages (e.g., Band: 50%, Producer: 30%, Label: 20%).
-    *   **Chain Selection**: Collaborators can choose to receive funds on **any supported chain** (Base, Optimism, Mainnet, etc.), abstracting away bridging complexity.
-*   This happens programmatically, ensuring funds are never "stuck" in a corporate bank account.
+1. **Play a Song**: Select and start playing
+2. **Per-Second Billing**: Balance decreases based on track's price-per-second
+3. **Switch Songs**: Each switch records listening data via off-chain state update
+4. **No Gas Fees**: All operations through Yellow Network
+
+**Key Innovation**: When a listener stops listening to one song to listen to another, they submit an **off-chain microtransaction**. This records how long they listened and calculates the payment owed. The listener only signs an on-chain transaction **once** - when they completely stop listening.
+
+### Phase 3: Session End (Final On-Chain Settlement)
+1. User clicks "End Session"
+2. Sum all off-chain micropayments
+3. Final state settled on-chain
+4. Funds distributed to artists via Circle Gateway
+5. Unused balance returned to listener
 
 ---
 
-## 🏗️ Architecture
+## 🌐 Yellow Network Integration
 
-The system is composed of two primary micro-services working in unison.
+### Why Yellow Network for Music Streaming?
 
-```mermaid
-graph TD
-    subgraph "User Client (Next.js)"
-        UI["Frontend UI"]
-        Wallet["MetaMask"]
-        MusicPlayer["Audio Player Component"]
-    end
+| Approach | Transactions | Cost per 1-hour session |
+|----------|--------------|-------------------------|
+| On-chain per second | 3,600 txns | ~$360 - $3,600 in gas |
+| On-chain per song | ~15 txns | ~$15 - $150 in gas |
+| **Yellow Network** | **2 txns** | **< $1 in gas** |
 
-    subgraph "Off-Chain Settlement Layer (Yellow)"
-        SessionMgr["Session Server (Express)"]
-        YellowNode["Yellow Network Node"]
-        StateChannel["State Channel"]
-    end
+Yellow Network makes micropayments viable by:
+1. **Collapsing transactions**: Thousands of state updates become one settlement
+2. **Eliminating gas**: Off-chain operations cost nothing
+3. **Maintaining security**: Smart contracts guarantee funds are protected
 
-    subgraph "Liquidity Layer (Circle Arc)"
-        ArcAPI["Arc API Wrapper"]
-        USDC["USDC Payment Rails"]
-        Splitter["Smart Splitter Logic"]
-    end
+### Implementation
 
-    %% Flows
-    UI -->|1. Sign Session| SessionMgr
-    UI -->|2. Stream Audio| MusicPlayer
-    MusicPlayer -->|3. Second-by-Second Signed State| SessionMgr
-    SessionMgr -->|4. Final Settlement| YellowNode
-    YellowNode -->|5. Settle Funds| USDC
-    USDC -->|6. Trigger Split| ArcAPI
-    ArcAPI -->|7. Auto-Route| Splitter
+#### Session Management
+```typescript
+interface UserSession {
+  sessionId: string;
+  channelId: string;
+  depositAmount: bigint;
+  currentBalance: bigint;
+  totalSpent: bigint;
+  listeningHistory: PlayEvent[];
+}
+```
+
+#### Backend Architecture
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────────────────┐
+│  Frontend   │────▶│  Backend    │────▶│  Yellow Network         │
+│  Next.js    │     │  Express    │     │  (Nitrolite/Clearnode)  │
+└─────────────┘     └─────────────┘     └─────────────────────────┘
+```
+
+#### API Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/session/start` | POST | Create new streaming session |
+| `/session/balance` | GET | Query current session balance |
+| `/session/play` | POST | Start playing a track |
+| `/session/stop` | POST | Stop playing, record micropayment |
+| `/session/end` | POST | End session, settle on-chain |
+
+#### Microtransaction Model
+```typescript
+interface PlayEvent {
+  songId: string;
+  durationSeconds: number;
+  pricePerSecond: bigint;
+  totalCost: bigint;  // durationSeconds * pricePerSecond
+}
 ```
 
 ---
 
-## 🧩 Core Integrations
+## 🔄 Circle Gateway Integration
 
-### 1. Yellow Network Integration (Latency & Fees)
+### What is Circle Gateway?
 
-**Prize Track**: *Integrate Yellow SDK*
+Circle Gateway enables **unified USDC balances** across multiple blockchains. Deposit on one chain, withdraw on any supported chain without bridging delays.
 
-Yellow Network allows us to bypass the block time limitations of traditional blockchains. We implement a custom **Session Manager** (`yellow/src/server.ts`) that acts as a counterparty to the user.
+Key capabilities:
+- **Chain Abstraction**: Multiple chains as a single liquidity surface
+- **Instant Transfers**: Move USDC between chains in seconds
+- **No Bridging Risk**: Native USDC minting via attestation
+- **Unified Balance**: One deposit available across all chains
 
-*   **Technology**: Yellow Clearing Network (YCN), **Nitrolite Protocol**, State Channels.
-*   **Why Yellow?**: It allows us to process thousands of transactions per second (TPS) off-chain while retaining the security guarantees of on-chain settlement found in the **Nitrolite test environment**.
-*   **Implementation Details**:
-    *   We utilize the **Yellow SDK** to create ephemeral "App Sessions".
-    *   The user's deposit is held in a **Custody Smart Contract**.
-    *   While the session is active, the balance is mutually updated off-chain via WebSocket.
-    *   We track `user_balance` and `provider_balance`. Every second, `user_balance` decreases by `0.0001` and `provider_balance` increases.
-    *   Upon session termination, a single transaction settles the net difference on Sepolia.
+### Why Circle Gateway for Artist Payouts?
 
-### 2. Circle Arc Integration (Liquidity & Splits)
+Artists prefer different chains:
+- **Ethereum**: Established DeFi ecosystem
+- **Base**: Low fees, Coinbase integration
+- **Arc**: Circle's native L1
+- **Avalanche**: High throughput
 
-**Prize Track**: *Best Chain Abstracted USDC Apps Using Arc as a Liquidity Hub*
+Circle Gateway enables LeStream to collect payments on Arc and route to each artist's preferred blockchain with native USDC.
 
-Arc is the financial engine of LeStream. Once funds are settled from Yellow, they need to be distributed to the rightful owners. Traditional payment splitters (like 0xSplits) are passive; Arc allows us to be active and chain-agnostic.
+### Supported Chains
 
-*   **Technology**: Circle Arc, Developer Controlled Wallets (DCX), **Circle Gateway**.
-*   **Why Arc?**: It provides a unified "Liquidity Surface". We don't need to worry about bridging or fragmentation. We can execute complex logic (splits, tax withholding, treasury management) programmatically via API.
-*   **Circle Gateway**: We leverage Circle Gateway for **arbitrary message passing** and value transfer. This allows us to settle funds on Sepolia (where the State Channel closes) and instantly bridge them to Arc (or any other chain) for distribution, without the user needing to manually bridge.
-*   **Implementation Details**:
-    *   We use the **Arc SDK** to manage a fleet of wallets representing different stakeholders (Artist, Producer, Platform).
-    *   Our `splitPayment.js` script listens for settlement events and atomically executes transfers based on the song's smart contract configuration.
-    *   This ensures that artists are paid **seconds** after a listener finishes a song, not months later.
-    *   **Artist Empowerment**: Creators have full control to define their revenue splits and payout destinations (Chain Agnostic), giving them financial sovereignty.
-    *   We use the `checkBalance` utility to verify funds before attempting splits to avoid gas wastage.
+| Chain | Domain ID | USDC Address |
+|-------|-----------|--------------|
+| Arc Testnet | 26 | `0x3600000000000000000000000000000000000000` |
+| Ethereum Sepolia | 0 | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+| Base Sepolia | 6 | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Avalanche Fuji | 1 | `0x5425890298aed601595a70AB815c96711a31Bc65` |
 
----
-
-## 🔬 Technical Deep Dive
-
-### Yellow Backend API (State Channels)
-
-Located in `yellow/src/server.ts`, this Node.js/Express server is the bridge between the frontend and the Yellow Network.
-
-#### Endpoints
-
-*   **`POST /session/start`**
-    *   **Description**: Initializes a streaming session. Locks user funds.
-    *   **Body**: 
-        ```json
-        { 
-          "userAddress": "0x123...", 
-          "depositAmount": "10.0" 
-        }
-        ```
-    *   **Response**: 
-        ```json
-        { 
-          "sessionId": "sess_abc123", 
-          "status": "active",
-          "initialBalance": "10.0"
-        }
-        ```
-
-*   **`GET /session/balance`**
-    *   **Description**: Returns the real-time balance of the user's active session.
-    *   **Query**: `?address=0x...`
-    *   **Response**: 
-        ```json
-        { 
-          "balance": "9.998", 
-          "formatted": "9.99 USD",
-          "sessionStatus": "active"
-        }
-        ```
-
-*   **`POST /session/play`**
-    *   **Description**: Processes a micro-payment for a chunk of audio.
-    *   **Body**: 
-        ```json
-        { 
-          "sessionId": "sess_abc123", 
-          "duration": 5, 
-          "rate": "0.0001" 
-        }
-        ```
-    *   **Logic**: Decrements user's off-chain balance, increments provider's balance. Returns updated balance.
-
-*   **`POST /session/end`**
-    *   **Description**: Closes the channel and triggers on-chain settlement.
-    *   **Body**: `{ "sessionId": "sess_abc123" }`
-
-    *   **Response**: `{ "txHash": "0x...", "settledAmount": "9.50" }`
-    *   **Logic**:
-        1.  Verifies final state signature.
-        2.  Submits on-chain transaction to yellow-network-v1 contracts on Sepolia.
-        3.  Triggers **`gatewayTransfer`** to bridge settled USDC from Sepolia to Arc via **Circle Gateway**.
-
----
-
-### Arc Scripts (Royalty Distribution)
-
-Located in `arc/src/`, these scripts execute the financial logic.
-
-#### `songs.js` (Configuration)
-
-Defines the royalty logic for the catalog. This acts as our "Rights Management Database".
-
-```javascript
-export const songs = [
-  {
-    id: "song_1",
-    title: "Midnight Dreams",
-    splits: {
-      artist: 0.60, // 60%
-      producer: 0.25, // 25%
-      platform: 0.15 // 15%
-    }
-  }
-]
+### Gateway Contracts
+```typescript
+const GATEWAY_WALLET: Address = "0x0077777d7EBA4688BDeF3E311b846F25870A19B9";
+const GATEWAY_MINTER: Address = "0x0022222ABE238Cc2C7Bb1f21003F0a260052475B";
 ```
 
-#### `splitPayment.js` (Core Logic)
+### Transfer Flow
 
-1.  **Input**: Takes a `totalAmount` (e.g., 100 USDC) and a `songId`.
-2.  **Calculation**: Computes shares based on `songs.js`.
-3.  **Execution**:
-    *   Initiates parallel transactions using `circle.wallets.createTransaction`.
-    *   Waits for confirmation using `circle.transactions.getTransaction`.
-    *   Logs the transaction IDs for audit in `TRANSACTION_LOG.md`.
+1. Session ends on Arc, royalties calculated
+2. Query artist's preferred chain (from ENS)
+3. Create burn intent with EIP-712 signature
+4. Submit to Gateway API for attestation
+5. Call `gatewayMint()` on destination chain
+6. USDC minted directly to artist's wallet
+
+```typescript
+interface TransferSpec {
+  sourceDomain: number;
+  destinationDomain: number;
+  sourceToken: Hex;
+  destinationToken: Hex;
+  destinationRecipient: Hex;
+  value: bigint;
+}
+```
 
 ---
 
-## 💿 Installation & Setup
+## 🏷️ ENS Integration
+
+### Why ENS for Music Streaming?
+
+ENS provides human-readable names and stores arbitrary data via text records. LeStream uses this for **decentralized artist profiles**.
+
+### Our Implementation
+
+#### 1. Human-Readable Artist Identities
+Display `artist.eth` instead of `0x14EBE0528f...`. Makes royalty splits and payment confirmations more understandable.
+
+#### 2. Stored Blockchain Preferences
+**Custom text records** store artist preferences:
+
+```
+ENS Text Records for artist.eth:
+├── lestream.payout-chain: "Base_Sepolia"
+└── lestream.royalty-split: "70"
+```
+
+Artists can specify:
+- **Preferred Blockchain**: Which chain for payouts
+- **Royalty Percentage**: Their share for collaborations
+
+### ENS Resolution
+```typescript
+export async function resolveENSName(name: string): Promise<string | null>;
+export async function getENSText(name: string, key: string): Promise<string | null>;
+
+// Get payout chain from ENS
+export function usePayoutChainPreference(ensName: string | undefined) {
+  return useENSText(ensName, "lestream.payout-chain");
+}
+```
+
+### ENS + Gateway Integration
+
+When a session ends:
+1. Resolve ENS names to addresses
+2. Query payout chain from ENS text records
+3. Execute Circle Gateway transfers to each artist's preferred chain
+
+---
+
+## 🎨 Artist Features
+
+### Configuring Payout Settings
+
+Artists control how they receive royalties:
+
+#### Select Preferred Blockchain
+Choose from Circle Gateway supported chains:
+- **Arc**: Circle's native L1
+- **Ethereum**: Most established
+- **Base**: Low fees, Coinbase ecosystem
+- **Avalanche**: High throughput
+
+#### Set Royalty Percentage
+For collaborative works:
+```
+Song: "Epic Collaboration"
+├── Primary Artist (producer.eth): 50%
+├── Featured Artist (vocalist.eth): 30%
+└── Songwriter (writer.eth): 20%
+```
+
+Each collaborator receives their percentage in native USDC on their preferred chain.
+
+---
+
+## 🛠️ Technical Architecture
+
+### Frontend (Next.js 16)
+```
+/app
+├── page.tsx              # Landing page
+├── listen/               # Music player
+├── artist/               # Artist dashboard
+├── upload/               # Upload tracks
+└── api/
+    ├── yellow-session/   # Yellow backend proxy
+    ├── gateway/          # Circle Gateway endpoints
+    └── ens/              # ENS resolution
+```
+
+### Backend (Express.js)
+```
+/yellow
+├── server.js             # Express entry
+├── src/
+│   ├── services/         # Yellow Network
+│   └── session/          # Session management
+```
+
+### Key Dependencies
+- **Next.js 16**: React framework
+- **Tailwind CSS**: Styling
+- **Wagmi/Viem**: Ethereum interactions
+- **Framer Motion**: Animations
+
+---
+
+## 📦 Installation
 
 ### Prerequisites
+- Node.js 20+
+- Web3 wallet (MetaMask)
+- USDC on supported testnet
 
-*   **Node.js**: v18.17.0 or later (v20 recommended)
-*   **pnpm** or **npm**: Package manager
-*   **Git**: Version control
-*   **Metamask**: Browser extension for EVM interactions
-
-### 1. Clone the Repository
+### Setup
 
 ```bash
-git clone https://github.com/your-username/LeStream.git
-cd LeStream
+# Clone repository
+git clone https://github.com/choonxiangg/hack-money-2026.git
+cd hack-money-2026
+
+# Install dependencies
+npm install
+cd yellow && npm install && cd ..
+cd arc && npm install && cd ..
 ```
 
-### 2. Install Dependencies
+### Environment Configuration
 
-We use a monorepo-style structure. You need to install dependencies in the root, and in each service directory.
-
+`.env.local`:
 ```bash
-# Root (Frontend)
-npm install
-
-# Yellow Backend
-cd yellow
-npm install
-cd ..
-
-# Arc Scripts
-cd arc
-npm install
-cd ..
+NEXT_PUBLIC_YELLOW_BACKEND_URL=http://localhost:3001
+EVM_PRIVATE_KEY=0x...
 ```
 
-### 3. Environment Configuration
-
-You will need `.env` files for each service. We have provided `.env.example` files in each directory.
-
-#### `yellow/.env`
-
-```ini
-# Private key for the server-side relayer wallet (Testnet Only)
-# This wallet must have Sepolia ETH for gas
+`yellow/.env`:
+```bash
+PRIVATE_KEY=0x...
 RELAYER_PRIVATE_KEY=0x...
-
-# RPC URL for Sepolia (Alchemy, Infura, etc.)
 SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/...
-
-# Frontend URL for CORS (Allow requests from your Next.js app)
-FRONTEND_URL=http://localhost:3000
+CLEARNODE_WS_URL=wss://clearnet-sandbox.yellow.com/ws
+YELLOW_SERVER_PORT=3001
 ```
 
-#### `.env.local` (Frontend)
+### Running Locally
 
-```ini
-# URL of the Yellow Backend Service
-YELLOW_BACKEND_URL=http://localhost:3001
-
-# RPC URL for client-side reads
-ALCHEMY_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/...
-```
-
----
-
-## ▶️ Running the Application
-
-To run the full stack, you will need three terminal windows or tabs.
-
-### Terminal 1: Yellow Backend
-
-This starts the Express server that manages state channels.
-
+**Terminal 1 - Yellow Backend:**
 ```bash
 cd yellow
 npm run server:dev
 ```
-*Output: `Server running on http://localhost:3001`*
 
-### Terminal 2: Next.js Frontend
-
-This starts the user interface.
-
+**Terminal 2 - Frontend:**
 ```bash
 npm run dev
 ```
-*Output: `Ready in 2.5s` -> Open http://localhost:3000*
 
-### Terminal 3: Arc Payment Simulator
+Open http://localhost:3000
 
-Run this manually to trigger the royalty split demo when you want to simulate a payout event.
+---
 
+## 🧪 Testing
+
+### Yellow Network
+```bash
+cd yellow
+npm run test:app-session
+```
+
+### Circle Gateway
 ```bash
 cd arc
-node src/testStream.js
+npm run test:gateway
 ```
-*Output: Logs showing USDC transfers to Artist/Producer wallets.*
 
----
+### Manual API Testing
+```bash
+# Health check
+curl http://localhost:3001/health
 
-## 🎬 Demo Walkthrough
+# Start session
+curl -X POST http://localhost:3001/session/start \
+  -H "Content-Type: application/json" \
+  -d '{"userAddress": "0x...", "privateKey": "0x...", "depositAmount": "0.01"}'
 
-Ready to test? Here is the script for a perfect demo.
+# Check balance
+curl "http://localhost:3001/session/balance?address=0x..."
 
-1.  **Start Services**: Ensure Backend (Port 3001) and Frontend (Port 3000) are running.
-2.  **Open App**: Go to `http://localhost:3000`.
-3.  **Connect Wallet**: Click the top-right button to connect your MetaMask (Sepolia).
-4.  **Deposit**:
-    *   Click the "Stream Credits" dropdown.
-    *   Enter Amount: `10.0`
-    *   Click "Deposit". *Wait for the on-chain confirmation.*
-    *   Observe the balance update to `10.0000 USDC`.
-5.  **Stream Music**:
-    *   Click "Play" on a song.
-    *   Watch the "Stream Credits" balance decrease in real-time (e.g., `9.9998`, `9.9996`...).
-    *   This is the **Yellow State Channel** working!
-6.  **Withdraw & Settle**:
-    *   Click "Withdraw".
-    *   This closes the session and returns your remaining funds to your wallet.
-7.  **Check Royalties (Arc)**:
-    *   Check the terminal running the Arc script.
-    *   You will see the revenue generated from your session being split 60/25/15.
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**1. "Failed to start session: Network Error"**
-*   **Cause**: The Yellow Backend is not running on port 3001.
-*   **Fix**: Check Terminal 1. Ensure `npm run server:dev` is running and no errors are in the logs.
-
-**2. "Insufficient Funds for Gas"**
-*   **Cause**: Your Metamask wallet (or the Relayer wallet in `.env`) has no Sepolia ETH.
-*   **Fix**: Get free testnet ETH from [Alchemy Faucet](https://sepoliafaucet.com/).
-
-**3. "CORS Error" in Browser Console**
-*   **Cause**: The `FRONTEND_URL` in `yellow/.env` does not match your browser URL.
-*   **Fix**: Ensure `FRONTEND_URL=http://localhost:3000`.
-
-**4. "Arc Wallet Not Found"**
-*   **Cause**: The `wallets.json` file in `arc/` is missing or has incorrect IDs.
-*   **Fix**: Regenerate wallet IDs using the Circle Developer Console.
-
----
-
-## 🔐 Security Considerations
-
-*   **Private Keys**: The `RELAYER_PRIVATE_KEY` in the backend `.env` is critical. It has authority to sign state updates. In production, this should be stored in a secret manager (AWS Secrets Manager / Vault), not a file.
-*   **State Channels**: We use a trusted "Relayer" model for the hackathon. In a fully decentralized version, the user would sign state updates directly in the browser, removing the need to trust the backend.
-*   **Arc Wallets**: The Circle Developer Controlled Wallets are configured with spending limits to prevent draining funds if a key is compromised.
+# End session
+curl -X POST http://localhost:3001/session/end \
+  -H "Content-Type: application/json" \
+  -d '{"userAddress": "0x..."}'
+```
 
 ---
 
 ## 🌍 Deployment
 
-### Vercel (Frontend)
+### Live Demo
+**https://hack-money-2026-git-yz-frontend-choonxianggs-projects.vercel.app**
 
-**Live Demo**: [hack-money-2026-steel.vercel.app](https://hack-money-2026-steel.vercel.app)
+### Deploy Frontend (Vercel)
+```bash
+npm i -g vercel
+vercel
+```
 
-1.  Push your code to GitHub.
-2.  Import the project into Vercel.
-3.  Set the Environment Variables in Vercel settings (`YELLOW_BACKEND_URL`, etc.).
-4.  Deploy.
-
-### DO / AWS (Backend)
-
-The Yellow Backend requires a persistent server (it cannot run on Vercel Serverless Functions due to the WebSocket connection).
-1.  Provision a droplet/EC2 instance.
-2.  Install Node.js and PM2.
-3.  Clone repo and run `pm2 start yellow/src/server.ts`.
-4.  Set up Nginx as a reverse proxy with SSL.
+### Deploy Yellow Backend
+Host on Railway, Render, or DigitalOcean with WebSocket support.
 
 ---
 
-## 🔮 Future Roadmap
+## 🏆 ETHGlobal HackMoney 2026 Prize Tracks
 
-### Phase 2: Decentralization
-*   **P2P State Channels**: Move the `yellow/server.ts` logic into a pure browser-based client (WASM), removing the need for a trusted server intermediary.
+### Yellow Network Prize ($15,000)
+- ✅ Session-based transactions with deposited funds
+- ✅ Off-chain micropayments for each song
+- ✅ On-chain settlement when session ends
+- ✅ Real-time Web2-like UX
 
-### Phase 3: Mainnet & Scale
-*   **Mainnet Deployment**: Deploy contracts to Base (for Arc).
-*   **Content Encryption**: Integrate Lit Protocol to encrypt audio files so only valid session holders can decrypt the stream. This prevents "right-click saving" the music.
+### Circle Arc Prize ($5,000)
+- ✅ Chain abstraction via Circle Gateway
+- ✅ Cross-chain routing to artist's preferred chain
+- ✅ Unified user experience
+- ✅ Native USDC minting via attestation
 
-### Phase 4: The "Label" Killer
-*   **Advances**: Allow artists to take out loans against projected streaming revenue (DeFi integration).
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our contribution guidelines below.
-
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+### ENS Prize ($3,500 Pool + $1,500 Creative DeFi)
+- ✅ ENS name resolution for artist identities
+- ✅ Custom text records for payout chain preferences
+- ✅ Decentralized artist profiles
+- ✅ ENS preferences drive cross-chain payment routing
 
 ---
 
-## � Feedback for Circle Arc
+## 📚 Resources
 
-As part of our development process, we wanted to share some feedback on the Arc SDK experience:
+### Yellow Network
+- [Documentation](https://docs.yellow.org/docs/learn)
+- [Tutorials](https://www.youtube.com/playlist?list=PL5Uk-e9pgXVldFAweILUcZjvaceTlgkKa)
 
-### What we loved ❤️
-*   **Concept**: The "Liquidity Surface" model is a huge mental unlock. Not having to think about "bridging" but just "spending" across chains is the future.
-*   **Speed**: Once set up, the `transfer` and `contractExecution` APIs are blazing fast.
-*   **Documentation**: The API references are comprehensive.
+### Circle
+- [Gateway Documentation](https://developers.circle.com/gateway)
+- [Supported Blockchains](https://developers.circle.com/gateway/references/supported-blockchains)
 
-### Areas for Improvement 🛠️
-*   **Wallet Management**: We found ourselves manually copying Wallet IDs into a `wallets.json` file. A CLI tool like `arc-cli wallets create --label "Artist"` that auto-appends to a config file would improve DX significantly.
-*   **Real-time Updates**: Polling `getTransaction` status is okay for MVP, but native WebSockets or Webhooks for transaction status changes would make building real-time UIs (like our streaming player) much smoother.
-*   **Testnet Faucet**: An integrated faucet within the Arc Dashboard to top up all testnet wallets at once would save time.
+### ENS
+- [Documentation](https://docs.ens.domains)
+- [Text Records](https://docs.ens.domains/web/records)
 
 ---
 
-## �📄 License
+## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+MIT License
+
+---
+
+<p align="center">
+  <strong>LeStream</strong> - The Future of Music Streaming is Decentralized
+</p>
+
+<p align="center">
+  <a href="https://hack-money-2026-git-yz-frontend-choonxianggs-projects.vercel.app">Try Live Demo</a>
+  ·
+  <a href="https://github.com/choonxiangg/hack-money-2026">View Source</a>
+</p>
