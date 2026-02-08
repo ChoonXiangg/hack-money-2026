@@ -31,7 +31,10 @@ export default function ConnectWallet() {
     try {
       const res = await fetch(`/api/balance?address=${encodeURIComponent(walletAddress)}`);
       const data = await res.json();
-      if (data.total) {
+      // Use ytest.usd wallet balance from Sepolia
+      if (data.ytestBalance) {
+        setBalance(data.ytestBalance);
+      } else if (data.total) {
         setBalance(data.total);
       }
     } catch (error) {
@@ -41,13 +44,23 @@ export default function ConnectWallet() {
     }
   }, []);
 
-  // Check for existing connection on mount
+  // Check for existing connection on mount and set up 5-second refresh
   useEffect(() => {
     const savedAddress = localStorage.getItem("walletAddress");
     if (savedAddress) {
       setAddress(savedAddress);
       fetchBalance(savedAddress);
     }
+
+    // Refresh balance every 5 seconds
+    const intervalId = setInterval(() => {
+      const addr = localStorage.getItem("walletAddress");
+      if (addr) {
+        fetchBalance(addr);
+      }
+    }, 5000);
+
+    return () => clearInterval(intervalId);
   }, [fetchBalance]);
 
   // Listen for account changes
