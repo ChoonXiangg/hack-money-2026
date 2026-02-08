@@ -6,6 +6,7 @@ import { Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
 import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import ENSAddressInput from "@/components/ENSAddressInput";
+import { isENSName, resolveToAddress } from "@/lib/ens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-<<<<<<< Updated upstream
-import Grainient from "@/components/ui/Grainient";
-import { resolveToAddress, isValidAddress, isENSName } from "@/lib/ens";
-=======
-
->>>>>>> Stashed changes
 
 // Arc supported testnets from arc/src/chains.js
 const SUPPORTED_TESTNETS = [
@@ -472,6 +467,13 @@ export default function UploadPage() {
                             collaborator.id,
                             "address",
                             value
+                          )
+                        }
+                        onPayoutChainResolved={(chain) =>
+                          updateCollaborator(
+                            collaborator.id,
+                            "blockchain",
+                            chain
                           )
                         }
                         placeholder="0x... or name.eth"
