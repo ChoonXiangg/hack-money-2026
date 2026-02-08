@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, use } from "react";
+import { useEffect, useRef, useState, use, useCallback } from "react";
+import { useTransactions } from "@/context/TransactionContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Play, Pause, CheckCircle, XCircle, AlertTriangle, Award } from "lucide-react";
@@ -110,8 +111,10 @@ export default function ListenPage({
     }
   };
 
+  const { addTransaction } = useTransactions();
+
   // Stop Yellow play tracking (triggers microtransaction)
-  const stopYellowPlay = async () => {
+  const stopYellowPlay = useCallback(async () => {
     if (!yellowPlayStartedRef.current) return;
 
     const walletAddress = localStorage.getItem("walletAddress");
@@ -128,13 +131,22 @@ export default function ListenPage({
         const data = await res.json();
         if (data.success) {
           console.log("[Yellow] Microtransaction completed", data);
+
+          // Trigger toast notification if we have transaction details
+          if (data.transactionDetails) {
+            addTransaction({
+              amount: data.transactionDetails.amount,
+              songName: data.transactionDetails.songName,
+              artistNames: data.transactionDetails.artistNames,
+            });
+          }
         }
       }
       yellowPlayStartedRef.current = false;
     } catch (err) {
       console.log("[Yellow] Failed to stop play:", err);
     }
-  };
+  }, [addTransaction]);
 
   const handlePlay = async () => {
     if (!audioRef.current) return;

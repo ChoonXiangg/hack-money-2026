@@ -6,6 +6,7 @@ const YELLOW_BACKEND_URL = process.env.YELLOW_BACKEND_URL || "http://localhost:3
  * POST /api/yellow/stop
  * Stop playing current song on the Yellow Network session
  * This triggers an off-chain microtransaction for the time listened
+ * Returns transactionDetails for toast notifications
  */
 export async function POST(request: NextRequest) {
     try {
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Return full response including transactionDetails
         return NextResponse.json(data);
     } catch (error) {
         console.error("Yellow stop error:", error);
@@ -52,3 +54,4 @@ export async function POST(request: NextRequest) {
         });
     }
 }
+
