@@ -80,6 +80,16 @@ const ERC20_ABI = [
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ type: "uint256" }],
   },
+  {
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
 ] as const;
 
 const GATEWAY_WALLET_ABI = [
@@ -426,6 +436,31 @@ export async function gatewayTransfer(
     operatorSignature: operatorSignature as Hex,
     mintTxHash,
   };
+}
+
+/**
+ * Direct ERC20 USDC transfer on a single chain (no Gateway needed).
+ */
+export async function directTransfer(
+  chainName: string,
+  amount: string,
+  recipientAddress: Address
+): Promise<Hex> {
+  const usdcAddress = USDC_ADDRESSES[chainName];
+  if (!usdcAddress) throw new Error(`No USDC address for chain: ${chainName}`);
+
+  const { publicClient, walletClient } = getClients(chainName);
+  const value = parseUnits(amount, 6);
+
+  const txHash = await walletClient.writeContract({
+    address: usdcAddress,
+    abi: ERC20_ABI,
+    functionName: "transfer",
+    args: [recipientAddress, value],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+  return txHash;
 }
 
 // ===== Utilities =====

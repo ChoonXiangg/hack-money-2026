@@ -29,7 +29,7 @@ import { createYellowService } from './YellowService';
 import type { YellowService } from './YellowService';
 import { formatUSDCDisplay, parseUSDC, RELAYER_ADDRESS } from './config';
 import type { Song, ListeningActivity, SongListeningRecord } from './types';
-import { gatewayTransfer, depositToGateway, formatUSDC } from './gateway';
+import { gatewayTransfer, depositToGateway, directTransfer, formatUSDC } from './gateway';
 import type { Address, Hex } from 'viem';
 
 // ============================================================================
@@ -127,8 +127,8 @@ async function payArtistsCrossChain(
     console.log(`  Total payment needed: ${formatUSDC(totalPaymentNeeded)} USDC`);
     console.log(`  Arc Hub Wallet: ${ARC_HUB_WALLET}`);
 
-    // Step 1: Bridge funds from Sepolia to Arc Hub
-    console.log('\n  STEP 1: Bridge to Arc Hub');
+    // Step 1: Deposit to Gateway Wallet on Arc (relayer already has USDC on Arc)
+    console.log('\n  STEP 1: Deposit to Gateway on Arc');
     console.log('  ' + '-'.repeat(40));
 
     let hubTransfer: { txHash: Hex | null; amount: string; error?: string } = {
@@ -137,23 +137,17 @@ async function payArtistsCrossChain(
     };
 
     try {
-        console.log(`    Bridging ${formatUSDC(totalPaymentNeeded)} USDC: Ethereum_Sepolia → Arc_Testnet`);
+        const depositAmount = formatUSDC(totalPaymentNeeded);
+        console.log(`    Depositing ${depositAmount} USDC to Gateway Wallet on Arc...`);
 
-        const bridgeResult = await gatewayTransfer(
-            'Ethereum_Sepolia',
-            'Arc_Testnet',
-            formatUSDC(totalPaymentNeeded),
-            ARC_HUB_WALLET
-        );
-
-        hubTransfer.txHash = bridgeResult.mintTxHash;
-        console.log(`    ✓ Bridge TX (mint on Arc): ${bridgeResult.mintTxHash}`);
+        const depositResult = await depositToGateway('Arc_Testnet', depositAmount);
+        hubTransfer.txHash = depositResult.depositTxHash;
+        console.log(`    ✓ Gateway deposit TX: ${depositResult.depositTxHash}`);
 
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         hubTransfer.error = errorMsg;
-        console.log(`    ✗ Bridge failed: ${errorMsg}`);
-        // Return early if hub transfer fails
+        console.log(`    ✗ Gateway deposit failed: ${errorMsg}`);
         return { hubTransfer, artistPayments };
     }
 
@@ -172,17 +166,22 @@ async function payArtistsCrossChain(
 
         try {
             if (destChain === 'Arc_Testnet') {
-                // Native Arc payment - no gateway needed
+                // Native Arc payment - direct ERC20 transfer
                 console.log(`      → Native Arc payment (direct USDC transfer)`);
-                // TODO: Implement direct ERC20 transfer on Arc
-                // For now, mark as successful since funds are already on Arc
+
+                const txHash = await directTransfer(
+                    'Arc_Testnet',
+                    amountStr,
+                    collaborator.address as Address
+                );
+
+                console.log(`      ✓ Transfer TX: ${txHash}`);
                 artistPayments.push({
                     artistName: collaborator.artistName,
                     artistAddress: collaborator.address,
                     blockchain: collaborator.blockchain,
                     amount: amountStr,
-                    txHash: hubTransfer.txHash, // Use hub TX as reference
-                    error: 'Native Arc transfer - funds available on Arc hub',
+                    txHash,
                 });
             } else {
                 // Cross-chain from Arc to other chain
