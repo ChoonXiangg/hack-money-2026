@@ -79,6 +79,8 @@ export class YellowService extends EventEmitter {
     private messageHandlers: Map<string, (data: unknown) => void> = new Map();
     /** App Session ID when using App Sessions mode */
     private appSessionId: `0x${string}` | null = null;
+    /** Channel ID used for the app session (bridges on-chain ↔ off-chain) */
+    private appSessionChannelId: `0x${string}` | null = null;
     /** App Session version for state updates (microtransactions) */
     private appSessionVersion: number = 1;
     /** Server-confirmed allocations for App Session (tracks actual state) */
@@ -320,6 +322,7 @@ export class YellowService extends EventEmitter {
 
         // Store server-confirmed state (like reference code does)
         this.appSessionId = sessionResult.appSessionId;
+        this.appSessionChannelId = sessionResult.channelId;
         this.appSessionVersion = sessionResult.version;
         this.appSessionAllocations = sessionResult.allocations;
 
@@ -453,7 +456,7 @@ export class YellowService extends EventEmitter {
      * End session using App Sessions - proper fund distribution
      */
     private async endAppSessionMode(): Promise<SettlementResult> {
-        if (!this.ws || !this.clients || !this.sessionKeyPair || !this.appSessionId) {
+        if (!this.ws || !this.clients || !this.sessionKeyPair || !this.appSessionId || !this.appSessionChannelId) {
             throw new Error('Not ready');
         }
 
@@ -502,6 +505,7 @@ export class YellowService extends EventEmitter {
             walletClient: this.clients.walletClient,
             sessionKeyPair: this.sessionKeyPair,
             appSessionId: this.appSessionId,
+            channelId: this.appSessionChannelId,
             userAddress,
             relayerAddress,
             totalSpent,
@@ -533,6 +537,7 @@ export class YellowService extends EventEmitter {
         // Reset
         const appSessionId = this.appSessionId;
         this.appSessionId = null;
+        this.appSessionChannelId = null;
         this.appSessionVersion = 1;
         this.sessionManager.reset();
 
