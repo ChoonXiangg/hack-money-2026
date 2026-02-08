@@ -65,6 +65,21 @@ export async function GET(request: NextRequest) {
         if (backendData.hasActiveSession && backendData.formatted) {
           sessionBalance = backendData.formatted;
           hasActiveSession = true;
+
+          // Return with allocation data if available
+          return NextResponse.json({
+            address,
+            balance: backendData.balance,
+            formatted: sessionBalance,
+            decimals: 6,
+            token: "ytest.usd",
+            hasActiveSession: true,
+            source: "session",
+            userAllocationAmount: backendData.userAllocationAmount || '0',
+            allocations: backendData.allocations || [],
+            depositAmount: backendData.depositAmount,
+            totalSpent: backendData.totalSpent,
+          });
         }
       }
     } catch (backendError) {
@@ -72,7 +87,7 @@ export async function GET(request: NextRequest) {
       console.log('Yellow backend not available, falling back to custody balance');
     }
 
-    // If session balance is available, return it
+    // If session balance is available (shouldn't reach here due to early return above)
     if (sessionBalance && hasActiveSession) {
       return NextResponse.json({
         address,
@@ -81,7 +96,7 @@ export async function GET(request: NextRequest) {
         decimals: 6,
         token: "ytest.usd",
         hasActiveSession: true,
-        source: "session", // Balance from active app session
+        source: "session",
       });
     }
 
@@ -98,11 +113,12 @@ export async function GET(request: NextRequest) {
       args: [[address as Address], [TOKEN_ADDRESS]],
     });
 
-    const custodyBalance = balances[0] || 0n;
+    const custodyBalance = balances[0] || BigInt(0);
 
     // Format balance (6 decimals for USDC)
-    const whole = custodyBalance / 1_000_000n;
-    const decimal = custodyBalance % 1_000_000n;
+    const million = BigInt(1000000);
+    const whole = custodyBalance / million;
+    const decimal = custodyBalance % million;
     const formatted = `${whole}.${decimal.toString().padStart(6, "0")}`;
 
     return NextResponse.json({

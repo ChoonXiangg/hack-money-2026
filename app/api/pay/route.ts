@@ -3,17 +3,16 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
-import { BridgeKit } from "@circle-fin/bridge-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
+import { gatewayTransfer, DOMAIN_IDS } from "@/lib/gateway";
+import type { Address } from "viem";
 
 const SONGS_DATA_PATH = path.join(process.cwd(), "data", "songs.json");
 
-// Arc Testnet USDC token ID
+// Arc Testnet USDC token ID (for Developer-Controlled Wallet transfers on Arc)
 const USDC_TOKEN_ID = "15dc2b5d-0994-58b0-bf8c-3a0501148ee8";
 
-// Source chain and wallet address for bridging
+// Source chain for payments (Arc is the liquidity hub)
 const SOURCE_CHAIN = "Arc_Testnet";
-const SOURCE_WALLET_ADDRESS = "0x843b9ec5c49092bbf874acbacb397d2c252e36a4";
 
 interface Collaborator {
   artistName: string;
@@ -110,35 +109,33 @@ export async function POST(request: NextRequest) {
 
       try {
         if (requiresBridging(chain)) {
-          // Cross-chain: Bridge USDC from Arc to destination chain via CCTP
-          console.log(`  Bridging to ${chain}...`);
+          // Cross-chain: Transfer USDC from Arc to destination chain via Circle Gateway
+          console.log(`  Gateway transfer to ${chain}...`);
 
-          const { apiKey, entitySecret } = getCircleCredentials();
-          const kit = new BridgeKit();
-          const adapter = createCircleWalletsAdapter({ apiKey, entitySecret });
-
-          const bridgeResult = await kit.bridge({
-            from: {
-              adapter,
-              chain: SOURCE_CHAIN,
-              address: SOURCE_WALLET_ADDRESS,
-            },
-            to: {
-              adapter,
-              chain,
+          if (DOMAIN_IDS[chain] === undefined) {
+            console.error(`  Unsupported Gateway destination chain: ${chain}`);
+            results.push({
+              artistName: collaborator.artistName,
               address: collaborator.address,
-            },
-            amount: shareAmount,
-          });
+              percentage,
+              amount: shareAmount,
+              chain,
+              bridged: true,
+              gateway: true,
+              success: false,
+              error: `Unsupported destination chain: ${chain}`,
+            });
+            continue;
+          }
 
-          // Convert BigInt values for JSON serialization
-          const safeResult = JSON.parse(
-            JSON.stringify(bridgeResult, (_key, value) =>
-              typeof value === "bigint" ? value.toString() : value
-            )
+          const gatewayResult = await gatewayTransfer(
+            SOURCE_CHAIN,
+            chain,
+            shareAmount,
+            collaborator.address as Address
           );
 
-          console.log(`  Bridge initiated successfully`);
+          console.log(`  Gateway transfer complete: mint tx=${gatewayResult.mintTxHash}`);
           results.push({
             artistName: collaborator.artistName,
             address: collaborator.address,
@@ -146,7 +143,8 @@ export async function POST(request: NextRequest) {
             amount: shareAmount,
             chain,
             bridged: true,
-            bridgeResult: safeResult,
+            gateway: true,
+            mintTxHash: gatewayResult.mintTxHash,
             success: true,
           });
         } else {
@@ -155,7 +153,7 @@ export async function POST(request: NextRequest) {
             walletId: listenerWalletId,
             tokenId: USDC_TOKEN_ID,
             destinationAddress: collaborator.address,
-            amounts: [shareAmount],
+            amount: [shareAmount],
             fee: {
               type: "level",
               config: { feeLevel: "MEDIUM" },
@@ -186,7 +184,7 @@ export async function POST(request: NextRequest) {
         results.push({
           artistName: collaborator.artistName,
           address: collaborator.address,
-          percentage: splitPercentage,
+          percentage,
           amount: shareAmount,
           chain,
           bridged: requiresBridging(chain),

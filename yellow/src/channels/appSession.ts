@@ -3,6 +3,7 @@ import {
     createCloseAppSessionMessage,
     createSubmitAppStateMessage,
     createTransferMessage,
+    createCreateChannelMessage,
     NitroliteClient,
     RPCProtocolVersion,
     RPCAppStateIntent,
@@ -10,9 +11,11 @@ import {
 import { type PublicClient, type Address, type Hash, type WalletClient } from 'viem';
 import WebSocket from 'ws';
 import type { SessionKeyPair } from '../auth';
-import type { CreateAppSessionResponse, CloseAppSessionResponse, ListeningActivity } from '../types';
-import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS, SESSION_CONFIG } from '../config';
-import { depositToCustody } from './resize';
+import type { CloseAppSessionResponse, CreateChannelResponse, ListeningActivity } from '../types';
+import { TIMING, formatUSDCDisplay, DEFAULT_TOKEN_ADDRESS, SESSION_CONFIG, SEPOLIA_CHAIN_ID } from '../config';
+import { depositToCustody, fundChannel } from './resize';
+import { submitChannelToBlockchain, waitForChannelIndexing } from './create';
+import { sendCloseChannelRequest, waitForCloseConfirmation, submitCloseToBlockchain } from './close';
 import { getTokenBalance } from './relayer';
 import { performRelayerWithdrawal } from './relayerWithdraw';
 
@@ -257,6 +260,21 @@ function waitForAppStateUpdate(
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+                // Check for error response first (critical: msg.res[1] === 'error')
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    console.log(`  ⚠ State update error: ${errorMsg}`);
+                    resolve({
+                        success: false,
+                        version: expectedVersion,
+                        userBalance: 0n,
+                        relayerBalance: 0n,
+                    });
+                    return;
+                }
                 if (msg.res && msg.res[1] === 'submit_app_state') {
                     const payload = msg.res[2];
                     clearTimeout(timeout);
@@ -273,7 +291,6 @@ function waitForAppStateUpdate(
                     clearTimeout(timeout);
                     ws.off('message', handler);
                     console.log(`  ⚠ State update error: ${msg.error.message}`);
-                    // Don't reject - continue with local tracking
                     resolve({
                         success: false,
                         version: expectedVersion,
@@ -365,12 +382,29 @@ function waitForAppSessionClose(
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             ws.off('message', handler);
+            console.log('  ✗ Close App Session timeout - no matching response received');
             reject(new Error('Close App Session timeout'));
         }, timeoutMs);
 
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+
+                // Debug: log all received messages during close
+                console.log('  [DEBUG] Received message during close:', JSON.stringify(msg, null, 2).substring(0, 500));
+
+                // Check for error response first (critical: msg.res[1] === 'error')
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    console.log('  ✗ Close App Session error:', errorMsg);
+                    reject(new Error(errorMsg));
+                    return;
+                }
+
+                // Check for close_app_session response
                 if (msg.res && msg.res[1] === 'close_app_session') {
                     const payload = msg.res[2] as CloseAppSessionResponse;
                     if (payload.app_session_id === appSessionId) {
@@ -380,6 +414,19 @@ function waitForAppSessionClose(
                         resolve(payload);
                     }
                 }
+
+                // Also check for 'closed' response type (alternate response format)
+                if (msg.res && (msg.res[1] === 'closed' || msg.res[1] === 'app_session_closed')) {
+                    const payload = msg.res[2] as CloseAppSessionResponse;
+                    const sessionId = payload.app_session_id || (payload as any).session_id;
+                    if (sessionId === appSessionId) {
+                        clearTimeout(timeout);
+                        ws.off('message', handler);
+                        console.log('  ✓ App Session closed (alternate response)');
+                        resolve(payload);
+                    }
+                }
+
                 if (msg.error) {
                     clearTimeout(timeout);
                     ws.off('message', handler);
@@ -412,16 +459,18 @@ export interface StartAppSessionParams {
 /** Result from starting an App Session */
 export interface StartAppSessionResult {
     appSessionId: `0x${string}`;
-    depositTxHash?: Hash;
+    channelId: `0x${string}`;
+    depositTxHash: Hash;
     version: number;
     allocations: Array<{ participant: string; asset: string; amount: string }>;
 }
 
 /**
- * Start an App Session with deposit
- * 1. Check/deposit to custody if needed
- * 2. Create App Session with user funds and relayer at 0
- * Returns server-confirmed session state (like reference code)
+ * Start an App Session with the full correct Yellow Network workflow:
+ * 1. Deposit to custody (on-chain: wallet → available balance)
+ * 2. Create channel (on-chain: register with clearnode)
+ * 3. Resize/fund channel (on-chain: available → channel-locked → unified balance)
+ * 4. Create App Session (off-chain: unified balance → app session)
  */
 export async function startAppSession(
     params: StartAppSessionParams
@@ -442,13 +491,48 @@ export async function startAppSession(
     console.log(`  Relayer: ${relayerAddress}`);
     console.log(`  Deposit: ${formatUSDCDisplay(depositAmount)}`);
 
-    // Step 1: Always deposit the requested amount on-chain (wallet -> custody)
-    const custodyBalanceBefore = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-    console.log(`  Current custody balance: ${formatUSDCDisplay(custodyBalanceBefore)}`);
+    // ── Step 0: Check for and close any existing open channels ──
+    console.log('\n  [Step 0] Checking for existing open channels...');
+    try {
+        const existingChannels = await client.getOpenChannels();
+        if (existingChannels.length > 0) {
+            console.log(`    Found ${existingChannels.length} existing open channel(s)`);
+            for (const existingChannelId of existingChannels) {
+                console.log(`    Closing existing channel: ${existingChannelId}`);
+                try {
+                    // Send close channel request via WebSocket
+                    await sendCloseChannelRequest({
+                        ws,
+                        sessionKeyPair,
+                        channelId: existingChannelId,
+                        fundsDestination: userAddress,
+                    });
 
-    // Check wallet balance
+                    // Wait for ClearNode confirmation
+                    const closeResponse = await waitForCloseConfirmation(ws, existingChannelId, 30000);
+
+                    // Submit close to blockchain
+                    await submitCloseToBlockchain(client, publicClient, closeResponse, 3);
+                    console.log(`    ✓ Closed existing channel: ${existingChannelId}`);
+
+                    // Wait a moment for state to settle
+                    await new Promise(r => setTimeout(r, 2000));
+                } catch (closeErr) {
+                    console.log(`    ⚠ Could not close channel ${existingChannelId}: ${closeErr}`);
+                    // Continue anyway - maybe the channel is already marked closed on clearnode
+                }
+            }
+        } else {
+            console.log('    No existing open channels found');
+        }
+    } catch (err) {
+        console.log(`    ⚠ Could not check for open channels: ${err}`);
+    }
+
+    // ── Step 1: Deposit to custody (on-chain: wallet → available balance) ──
+    console.log('\n  [Step 1] Deposit to custody (on-chain)...');
     const walletBalance = await getTokenBalance(publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
-    console.log(`  Wallet balance: ${formatUSDCDisplay(walletBalance)}`);
+    console.log(`    Wallet balance: ${formatUSDCDisplay(walletBalance)}`);
 
     if (walletBalance < depositAmount) {
         throw new Error(
@@ -457,23 +541,45 @@ export async function startAppSession(
         );
     }
 
-    // Always deposit the full amount on-chain
-    console.log(`  Depositing ${formatUSDCDisplay(depositAmount)} from wallet to custody (on-chain TX)...`);
+    console.log(`    Depositing ${formatUSDCDisplay(depositAmount)} from wallet to custody...`);
     const depositTxHash = await depositToCustody(
         client,
         publicClient,
         DEFAULT_TOKEN_ADDRESS,
         depositAmount
     );
-    console.log(`  ✓ Deposit TX: ${depositTxHash}`);
+    console.log(`    ✓ Deposit TX: ${depositTxHash}`);
 
     // Wait for custody balance to update
     await new Promise(r => setTimeout(r, 3000));
+    const custodyAfterDeposit = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+    console.log(`    Custody balance after deposit: ${formatUSDCDisplay(custodyAfterDeposit)}`);
 
-    const custodyBalanceAfter = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-    console.log(`  Custody balance after deposit: ${formatUSDCDisplay(custodyBalanceAfter)}`);
+    // ── Step 2: Create channel (on-chain) ──
+    console.log('\n  [Step 2] Create channel (on-chain)...');
+    const channelId = await createChannelViaWebSocket(ws, client, publicClient, sessionKeyPair);
+    console.log(`    ✓ Channel created: ${channelId}`);
 
-    // Step 2: Create App Session
+    // Wait for channel indexing
+    await waitForChannelIndexing();
+
+    // ── Step 3: Resize/fund channel (on-chain: available → channel-locked → unified balance) ──
+    console.log('\n  [Step 3] Fund channel via resize (on-chain)...');
+    console.log(`    Moving ${formatUSDCDisplay(depositAmount)} from available → channel-locked → unified balance`);
+    const { txHash: resizeTxHash } = await fundChannel({
+        ws,
+        client,
+        publicClient,
+        sessionKeyPair,
+        channelId,
+        amount: depositAmount,
+        fundsDestination: userAddress,
+    });
+    console.log(`    ✓ Resize TX: ${resizeTxHash}`);
+    console.log(`    Funds are now in unified balance (off-chain, tracked by clearnode)`);
+
+    // ── Step 4: Create App Session (off-chain: unified balance → app session) ──
+    console.log('\n  [Step 4] Create App Session (off-chain)...');
     const sessionResult = await createAppSession({
         ws,
         sessionKeyPair,
@@ -483,16 +589,95 @@ export async function startAppSession(
         tokenSymbol,
     });
 
-    console.log(`✓ App Session started: ${sessionResult.appSessionId}`);
-    console.log(`  Version: ${sessionResult.version}`);
-    console.log(`  Allocations: ${sessionResult.allocations.length} participants`);
+    console.log(`  ✓ App Session started: ${sessionResult.appSessionId}`);
+    console.log(`    Version: ${sessionResult.version}`);
+    console.log(`    Allocations: ${sessionResult.allocations.length} participants`);
 
     return {
         appSessionId: sessionResult.appSessionId,
+        channelId,
         depositTxHash,
         version: sessionResult.version,
         allocations: sessionResult.allocations,
     };
+}
+
+// ============================================================================
+// Channel Creation via WebSocket (for App Session flow)
+// ============================================================================
+
+/**
+ * Create a channel via WebSocket + submit to blockchain
+ * This bridges on-chain custody to off-chain unified balance
+ */
+async function createChannelViaWebSocket(
+    ws: WebSocket,
+    client: NitroliteClient,
+    publicClient: PublicClient,
+    sessionKeyPair: SessionKeyPair,
+): Promise<`0x${string}`> {
+    // Send create channel request
+    const createChannelMsg = await createCreateChannelMessage(
+        sessionKeyPair.signer,
+        {
+            chain_id: SEPOLIA_CHAIN_ID,
+            token: DEFAULT_TOKEN_ADDRESS,
+        }
+    );
+    ws.send(createChannelMsg);
+    console.log('    Create channel request sent...');
+
+    // Wait for create_channel response
+    const response = await waitForCreateChannelResponse(ws);
+
+    // Submit to blockchain
+    const result = await submitChannelToBlockchain(client, publicClient, response);
+    return result.channelId;
+}
+
+/**
+ * Wait for create_channel confirmation from ClearNode
+ */
+function waitForCreateChannelResponse(
+    ws: WebSocket,
+    timeoutMs: number = TIMING.wsMessageTimeout
+): Promise<CreateChannelResponse> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            ws.off('message', handler);
+            reject(new Error('Create channel timeout'));
+        }, timeoutMs);
+
+        const handler = (data: WebSocket.Data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                // Check for error response first
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(errorMsg));
+                    return;
+                }
+                if (msg.res && msg.res[1] === 'create_channel') {
+                    const payload = msg.res[2];
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    resolve(payload as CreateChannelResponse);
+                }
+                if (msg.error) {
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(msg.error.message || 'Create channel error'));
+                }
+            } catch (err) {
+                // Ignore parse errors
+            }
+        };
+
+        ws.on('message', handler);
+    });
 }
 
 // ============================================================================
@@ -506,6 +691,7 @@ export interface EndAppSessionParams {
     walletClient: WalletClient;
     sessionKeyPair: SessionKeyPair;
     appSessionId: `0x${string}`;
+    channelId: `0x${string}`;
     userAddress: Address;
     relayerAddress: Address;
     totalSpent: bigint;
@@ -525,13 +711,13 @@ export interface EndAppSessionResult {
 }
 
 /**
- * End an App Session with proper fund distribution
+ * End an App Session with the full correct Yellow Network workflow:
  *
- * Flow:
- * 1. Close App Session off-chain (sets final allocations, funds return to user's unified balance)
- * 2. Off-chain transfer: user sends relayerPayment to relayer's unified balance (instant, no gas)
- * 3. User withdraws userRefund from their unified balance (on-chain tx)
- * 4. Relayer withdraws relayerPayment from their unified balance (on-chain tx)
+ * 1. Close App Session off-chain (app session → unified balance)
+ * 2. Off-chain transfer: user sends relayerPayment to relayer's unified balance
+ * 3. Close channel (on-chain: unified balance → available/custody balance)
+ * 4. User withdraws refund from custody (on-chain: available → wallet)
+ * 5. Relayer withdraws earned funds
  *
  * After all steps, user custody = 0.
  */
@@ -544,6 +730,7 @@ export async function endAppSession(
         publicClient,
         sessionKeyPair,
         appSessionId,
+        channelId,
         userAddress,
         relayerAddress,
         totalSpent,
@@ -558,6 +745,7 @@ export async function endAppSession(
 
     console.log('\n[Ending App Session with Settlement]');
     console.log(`  Session ID: ${appSessionId}`);
+    console.log(`  Channel ID: ${channelId}`);
     console.log(`  Total deposited: ${formatUSDCDisplay(depositAmount)}`);
     console.log(`  Total spent: ${formatUSDCDisplay(totalSpent)}`);
     console.log(`  User refund: ${formatUSDCDisplay(userRefund)}`);
@@ -570,10 +758,9 @@ export async function endAppSession(
         );
     }
 
-    // Step 1: Close App Session off-chain with final allocations
-    // All funds return to the user's unified balance
+    // ── Step 1: Close App Session off-chain (app session → unified balance) ──
     console.log('\n  [Step 1] Closing App Session off-chain with final allocations...');
-    const closeResponse = await closeAppSession({
+    const closeAppResponse = await closeAppSession({
         ws,
         sessionKeyPair,
         appSessionId,
@@ -584,12 +771,11 @@ export async function endAppSession(
         tokenSymbol,
     });
 
-    console.log('  Close response:', JSON.stringify(closeResponse, null, 2));
+    console.log('  Close response:', JSON.stringify(closeAppResponse, null, 2));
     console.log('  Waiting for off-chain close to process...');
     await new Promise(r => setTimeout(r, 5000));
 
-    // Step 2: Off-chain transfer — move relayer's portion from user's unified balance to relayer's
-    // This is instant, zero gas, purely off-chain
+    // ── Step 2: Off-chain transfer (relayer payment: user's unified → relayer's unified) ──
     console.log(`\n  [Step 2] Off-chain transfer: sending relayer payment to relayer's unified balance...`);
 
     if (relayerPayment > 0n) {
@@ -626,20 +812,53 @@ export async function endAppSession(
         console.log(`    No payment for relayer (user spent nothing)`);
     }
 
-    // Step 3: User withdraws their refund from unified balance
+    // ── Step 3: Close channel (on-chain: unified balance → available/custody balance) ──
+    console.log(`\n  [Step 3] Closing channel (on-chain: unified → available balance)...`);
+    console.log(`    Channel ID: ${channelId}`);
+
+    let closeTxHash: Hash | undefined;
+    try {
+        await sendCloseChannelRequest({
+            ws,
+            sessionKeyPair,
+            channelId,
+            fundsDestination: userAddress,
+        });
+
+        const closeChannelResponse = await waitForCloseConfirmation(ws, channelId);
+        closeTxHash = await submitCloseToBlockchain(client, publicClient, closeChannelResponse);
+        console.log(`    ✓ Channel closed on-chain: ${closeTxHash}`);
+
+        // Wait for close to settle
+        await new Promise(r => setTimeout(r, 5000));
+    } catch (err) {
+        console.log(`    ⚠ Channel close failed: ${err}`);
+        console.log(`    Continuing with withdrawal...`);
+    }
+
+    // ── Step 4: User withdraws refund from custody (on-chain: available → wallet) ──
     let userWithdrawTxHash: Hash | undefined;
-    console.log(`\n  [Step 3] User withdrawing refund from unified balance...`);
+    console.log(`\n  [Step 4] User withdrawing refund from custody (on-chain)...`);
 
     if (userRefund > 0n) {
-        const userBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
-        console.log(`    User unified balance: ${formatUSDCDisplay(userBalance)}`);
+        // Wait a bit for custody balance to reflect channel close
+        await new Promise(r => setTimeout(r, 3000));
+
+        const custodyBalance = await client.getAccountBalance(DEFAULT_TOKEN_ADDRESS);
+        console.log(`    User custody balance: ${formatUSDCDisplay(custodyBalance)}`);
         console.log(`    Withdrawing user refund: ${formatUSDCDisplay(userRefund)}`);
 
         try {
-            userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, userRefund);
-            console.log(`    ✓ User withdrawal TX: ${userWithdrawTxHash}`);
-            await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
-            console.log('    ✓ User withdrawal confirmed');
+            // Withdraw what's available (may differ slightly from expected refund)
+            const withdrawAmount = custodyBalance > 0n ? (custodyBalance < userRefund ? custodyBalance : userRefund) : 0n;
+            if (withdrawAmount > 0n) {
+                userWithdrawTxHash = await client.withdrawal(DEFAULT_TOKEN_ADDRESS, withdrawAmount);
+                console.log(`    ✓ User withdrawal TX: ${userWithdrawTxHash}`);
+                await publicClient.waitForTransactionReceipt({ hash: userWithdrawTxHash });
+                console.log('    ✓ User withdrawal confirmed');
+            } else {
+                console.log('    No funds available to withdraw');
+            }
         } catch (err) {
             console.log(`    ⚠ User withdrawal failed: ${err}`);
         }
@@ -647,8 +866,8 @@ export async function endAppSession(
         console.log(`    No refund due (user spent entire deposit)`);
     }
 
-    // Step 4: Relayer withdraws earned funds (ledger → channel → close → custody → wallet)
-    console.log(`\n  [Step 4] Relayer withdrawing earned funds via channel dance...`);
+    // ── Step 5: Relayer withdraws earned funds ──
+    console.log(`\n  [Step 5] Relayer withdrawing earned funds via channel dance...`);
 
     let relayerWithdrawTxHash: Hash | undefined;
     if (relayerPayment > 0n) {
@@ -685,7 +904,7 @@ export async function endAppSession(
     }
 
     return {
-        closeResponse,
+        closeResponse: closeAppResponse,
         userWithdrawTxHash,
         relayerTransferTxHash: relayerWithdrawTxHash,
         relayerReceived: relayerPayment,
@@ -710,6 +929,15 @@ function waitForTransferConfirmation(
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+                // Check for error response first (critical: msg.res[1] === 'error')
+                if (msg.res && msg.res[1] === 'error') {
+                    const errorPayload = msg.res[2];
+                    const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
+                    clearTimeout(timeout);
+                    ws.off('message', handler);
+                    reject(new Error(errorMsg));
+                    return;
+                }
                 if (msg.res && msg.res[1] === 'transfer') {
                     clearTimeout(timeout);
                     ws.off('message', handler);

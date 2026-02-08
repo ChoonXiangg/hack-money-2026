@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
+const SUPPORTED_CHAINS = [
+    { id: "Arc_Testnet", name: "Arc" },
+    { id: "Ethereum_Sepolia", name: "Ethereum Sepolia" },
+    { id: "Base_Sepolia", name: "Base Sepolia" },
+    { id: "Avalanche_Fuji", name: "Avalanche Fuji" },
+];
+
 export default function StreamCredits() {
     const [credits, setCredits] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -13,6 +20,9 @@ export default function StreamCredits() {
     const [isDepositing, setIsDepositing] = useState(false);
     const [isWithdrawing, setIsWithdrawing] = useState(false);
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [selectedChain, setSelectedChain] = useState("Arc_Testnet");
+    const [gatewayBalance, setGatewayBalance] = useState<string | null>(null);
+    const [chainBalances, setChainBalances] = useState<{ chain: string; balance: string }[]>([]);
 
     const fetchYellowBalance = useCallback(async (walletAddress: string) => {
         setIsLoading(true);
@@ -22,10 +32,23 @@ export default function StreamCredits() {
             const res = await fetch(`/api/yellow-session?address=${encodeURIComponent(walletAddress)}`);
             const data = await res.json();
 
-            if (res.ok && data.formatted) {
-                // Parse and format to 4 decimal places for display
-                const balance = parseFloat(data.formatted);
-                setCredits(balance.toFixed(4));
+            if (res.ok) {
+                // Prefer userAllocationAmount (app session allocation) if available
+                if (data.userAllocationAmount && data.userAllocationAmount !== '0') {
+                    // Format the allocation amount (it's in wei, needs to be divided by 1e6)
+                    const amountBigInt = BigInt(data.userAllocationAmount);
+                    const million = BigInt(1000000);
+                    const whole = amountBigInt / million;
+                    const decimal = amountBigInt % million;
+                    const formatted = `${whole}.${decimal.toString().padStart(6, '0')}`;
+                    setCredits(parseFloat(formatted).toFixed(4));
+                } else if (data.formatted) {
+                    // Fall back to session/custody balance
+                    const balance = parseFloat(data.formatted);
+                    setCredits(balance.toFixed(4));
+                } else {
+                    setCredits("0.0000");
+                }
             } else {
                 console.error("Failed to fetch Yellow balance:", data.error);
                 setError(true);
@@ -40,12 +63,30 @@ export default function StreamCredits() {
         }
     }, []);
 
+    const fetchMultiChainBalance = useCallback(async (walletAddress: string) => {
+        try {
+            const res = await fetch(`/api/balance?address=${encodeURIComponent(walletAddress)}`);
+            const data = await res.json();
+            if (res.ok) {
+                if (data.gateway?.totalAvailable) {
+                    setGatewayBalance(data.gateway.totalAvailable);
+                }
+                if (data.chainBalances) {
+                    setChainBalances(data.chainBalances);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch multi-chain balance:", err);
+        }
+    }, []);
+
     useEffect(() => {
         // Check for wallet address
         const checkAndFetchBalance = () => {
             const walletAddress = localStorage.getItem("walletAddress");
             if (walletAddress) {
                 fetchYellowBalance(walletAddress);
+                fetchMultiChainBalance(walletAddress);
             } else {
                 setCredits("0.0000");
                 setIsLoading(false);
@@ -62,19 +103,20 @@ export default function StreamCredits() {
 
         window.addEventListener("walletChanged", handleWalletChange);
 
-        // Refresh balance every 10 seconds if wallet is connected
+        // Refresh balance every 5 seconds if wallet is connected
         const interval = setInterval(() => {
             const walletAddress = localStorage.getItem("walletAddress");
             if (walletAddress) {
                 fetchYellowBalance(walletAddress);
+                fetchMultiChainBalance(walletAddress);
             }
-        }, 10000);
+        }, 5000);
 
         return () => {
             window.removeEventListener("walletChanged", handleWalletChange);
             clearInterval(interval);
         };
-    }, [fetchYellowBalance]);
+    }, [fetchYellowBalance, fetchMultiChainBalance]);
 
     const handleDeposit = async () => {
         const amount = parseFloat(depositAmount);
@@ -192,11 +234,50 @@ export default function StreamCredits() {
             {/* Dropdown Content */}
             {isExpanded && (
                 <div className="px-5 pb-4 border-t border-white/10 mt-2">
+                    {/* Multi-Chain Balances */}
+                    {chainBalances.length > 0 && (
+                        <div className="mt-3 mb-3 p-2 bg-white/5 rounded-lg">
+                            <p className="text-xs text-white/60 mb-1.5 font-[family-name:var(--font-murecho)]">
+                                USDC Balances (via Gateway)
+                            </p>
+                            {chainBalances.map((cb) => (
+                                <div key={cb.chain} className="flex justify-between text-xs font-[family-name:var(--font-murecho)]">
+                                    <span className="text-white/50">{cb.chain}</span>
+                                    <span className="text-white/80">{parseFloat(cb.balance).toFixed(4)}</span>
+                                </div>
+                            ))}
+                            {gatewayBalance && (
+                                <div className="flex justify-between text-xs font-[family-name:var(--font-murecho)] mt-1 pt-1 border-t border-white/10">
+                                    <span className="text-blue-400">Gateway Unified</span>
+                                    <span className="text-blue-300">{parseFloat(gatewayBalance).toFixed(4)}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Warning Banner */}
                     <div className="mt-3 mb-3 p-2 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
                         <p className="text-xs text-yellow-300 font-[family-name:var(--font-murecho)]">
                             ⚠️ <strong>Testnet Only:</strong> Enter your private key to deposit and start a Yellow Network streaming session.
                         </p>
+                    </div>
+
+                    {/* Chain Selector */}
+                    <div className="mb-3">
+                        <label className="block text-xs text-white/60 mb-2 font-[family-name:var(--font-murecho)]">
+                            Source Chain
+                        </label>
+                        <select
+                            value={selectedChain}
+                            onChange={(e) => setSelectedChain(e.target.value)}
+                            className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm font-[family-name:var(--font-murecho)] focus:outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                        >
+                            {SUPPORTED_CHAINS.map((chain) => (
+                                <option key={chain.id} value={chain.id} className="bg-black text-white">
+                                    {chain.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     {/* Amount Input */}
@@ -263,11 +344,10 @@ export default function StreamCredits() {
 
                     {/* Action Message */}
                     {actionMessage && (
-                        <div className={`text-xs font-[family-name:var(--font-murecho)] p-2 rounded ${
-                            actionMessage.type === 'success'
+                        <div className={`text-xs font-[family-name:var(--font-murecho)] p-2 rounded ${actionMessage.type === 'success'
                                 ? 'bg-green-900/30 text-green-300'
                                 : 'bg-red-900/30 text-red-300'
-                        }`}>
+                            }`}>
                             {actionMessage.text}
                         </div>
                     )}

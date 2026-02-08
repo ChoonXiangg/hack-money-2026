@@ -46,8 +46,10 @@ export default function ListenPage({
   const [popupMessage, setPopupMessage] = useState("");
   const [popupDetails, setPopupDetails] = useState("");
   const [earnedBadges, setEarnedBadges] = useState<{ artistName: string; tierName: string }[]>([]);
+  const [hasSession, setHasSession] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const yellowPlayStartedRef = useRef(false); // Track if we've started Yellow play tracking
 
   useEffect(() => {
     fetch("/api/upload")
@@ -59,21 +61,97 @@ export default function ListenPage({
       .catch(console.error);
   }, [id]);
 
+  // Cleanup timer and trigger Yellow stop on unmount
   useEffect(() => {
+    const walletAddress = localStorage.getItem("walletAddress");
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+
+      // Trigger off-chain payment when leaving the page
+      if (yellowPlayStartedRef.current && walletAddress) {
+        // Use sendBeacon for reliable unmount calls
+        const data = JSON.stringify({ userAddress: walletAddress });
+        navigator.sendBeacon("/api/yellow/stop", new Blob([data], { type: "application/json" }));
+        yellowPlayStartedRef.current = false;
+      }
     };
   }, []);
 
-  const handlePlay = () => {
+  // Start Yellow play tracking when song is selected
+  const startYellowPlay = async () => {
+    if (!song || yellowPlayStartedRef.current) return;
+
+    const walletAddress = localStorage.getItem("walletAddress");
+    if (!walletAddress) return;
+
+    try {
+      const res = await fetch("/api/yellow/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userAddress: walletAddress,
+          song: {
+            id: song.id,
+            songName: song.songName,
+            pricePerSecond: song.pricePerSecond,
+            collaborators: song.collaborators,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        yellowPlayStartedRef.current = true;
+        setHasSession(true);
+        console.log("[Yellow] Started play tracking");
+      }
+    } catch (err) {
+      console.log("[Yellow] Backend unavailable, continuing without payment tracking");
+    }
+  };
+
+  // Stop Yellow play tracking (triggers microtransaction)
+  const stopYellowPlay = async () => {
+    if (!yellowPlayStartedRef.current) return;
+
+    const walletAddress = localStorage.getItem("walletAddress");
+    if (!walletAddress) return;
+
+    try {
+      const res = await fetch("/api/yellow/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAddress: walletAddress }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          console.log("[Yellow] Microtransaction completed", data);
+        }
+      }
+      yellowPlayStartedRef.current = false;
+    } catch (err) {
+      console.log("[Yellow] Failed to stop play:", err);
+    }
+  };
+
+  const handlePlay = async () => {
     if (!audioRef.current) return;
 
     if (isPlaying) {
+      // Pausing - trigger off-chain payment
       audioRef.current.pause();
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
       setIsPlaying(false);
+
+      // Trigger microtransaction for time listened
+      await stopYellowPlay();
     } else {
+      // Starting playback - notify Yellow
+      await startYellowPlay();
+
       audioRef.current.play();
       setIsPlaying(true);
       timerRef.current = setInterval(() => {
@@ -101,10 +179,13 @@ export default function ListenPage({
     }
   };
 
-  const handleEnded = () => {
+  const handleEnded = async () => {
     setIsPlaying(false);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
+
+    // Trigger off-chain payment when song ends
+    await stopYellowPlay();
   };
 
   const showPopup = (status: "success" | "partial" | "error", message: string, details: string) => {
@@ -129,26 +210,16 @@ export default function ListenPage({
 
     setIsPaying(true);
     setEarnedBadges([]);
+
     try {
-      // 1. Process payment
-      const res = await fetch("/api/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ songId: id, seconds: secondsListened }),
-      });
+      // 1. Trigger off-chain payment via Yellow Network
+      await stopYellowPlay();
 
-      const data = await res.json();
+      // Calculate total cost for display
+      const pricePerSec = parseFloat(song?.pricePerSecond || "0");
+      const totalPaid = (pricePerSec * secondsListened).toFixed(6);
 
-      if (!res.ok) {
-        showPopup("error", "Payment Failed", data.error || "Unknown error");
-        return;
-      }
-
-      const successCount = data.summary?.successful || 0;
-      const failCount = data.summary?.failed || 0;
-      const totalPaid = data.totalAmount || "0";
-
-      // 2. Persist listening time
+      // 2. Persist listening time for badges
       const listenerAddress = typeof window !== "undefined"
         ? localStorage.getItem("walletAddress") || "anonymous"
         : "anonymous";
@@ -198,19 +269,11 @@ export default function ListenPage({
 
       setEarnedBadges(badgesEarned);
 
-      if (failCount > 0) {
-        showPopup(
-          "partial",
-          "Partial Payment",
-          `${successCount} succeeded, ${failCount} failed.\n${totalPaid} USDC for ${secondsListened}s of "${song?.songName}"`
-        );
-      } else {
-        showPopup(
-          "success",
-          "Payment Successful",
-          `${totalPaid} USDC paid for ${secondsListened}s of "${song?.songName}"`
-        );
-      }
+      showPopup(
+        "success",
+        "Session Recorded",
+        `${totalPaid} USDC for ${secondsListened}s of "${song?.songName}" (off-chain payment)`
+      );
     } catch (error) {
       console.error("Payment error:", error);
       showPopup("error", "Payment Failed", "Something went wrong. Please try again.");
@@ -381,18 +444,8 @@ export default function ListenPage({
               onChange={handleSliderChange}
             />
           </div>
-
-          {/* Finish and Pay Button */}
-          <Button
-            onClick={handleFinishAndPay}
-            disabled={isPaying}
-            className="mt-4 w-[500px] bg-black px-12 py-7 font-[family-name:var(--font-climate)] text-2xl text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-black hover:shadow-xl disabled:opacity-50 disabled:hover:scale-100"
-          >
-            {isPaying ? "Paying..." : "Finish and Pay"}
-          </Button>
         </div>
       </div>
-
       {/* Payment Result Popup */}
       <Dialog open={popupOpen} onOpenChange={(open) => {
         setPopupOpen(open);

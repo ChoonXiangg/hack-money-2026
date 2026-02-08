@@ -51,12 +51,15 @@ async function main() {
     console.log('App Session Music Streaming Test');
     console.log('='.repeat(60));
     console.log(`Relayer Address: ${RELAYER_ADDRESS}`);
-    console.log('\nFlow:');
-    console.log('  1. Deposit to custody (on-chain tx)');
-    console.log('  2. Create App Session (off-chain)');
-    console.log('  3. Play songs (off-chain microtransactions on switch)');
-    console.log('  4. Close session (off-chain)');
-    console.log('  5. Withdraw refund (on-chain tx)');
+    console.log('\nFull Yellow Network Workflow:');
+    console.log('  1. Deposit to custody (on-chain: wallet → available balance)');
+    console.log('  2. Create channel (on-chain: register with clearnode)');
+    console.log('  3. Resize/fund channel (on-chain: available → channel-locked → unified balance)');
+    console.log('  4. Create App Session (off-chain: unified balance → app session)');
+    console.log('  5. Play songs (off-chain microtransactions on switch)');
+    console.log('  6. Close App Session (off-chain: app session → unified balance)');
+    console.log('  7. Close channel (on-chain: unified → available balance)');
+    console.log('  8. Withdraw refund (on-chain: available → wallet)');
     console.log('\nKey benefit: Song payments are OFF-CHAIN (no gas per song!)');
 
     // Get private key from environment
@@ -126,10 +129,11 @@ async function main() {
         console.log('\n[Step 2] Connecting to ClearNode...');
         await service.connect();
 
-        // Step 3: Start App Session with deposit
-        console.log('\n[Step 3] Starting App Session (TX 1: Deposit)...');
+        // Step 3: Start App Session (deposit → channel → resize → app session)
+        console.log('\n[Step 3] Starting App Session (full channel dance)...');
         const depositAmount = parseUSDC('0.01'); // 0.01 USDC
         console.log(`  Deposit amount: ${formatUSDCDisplay(depositAmount)}`);
+        console.log('  This will: deposit on-chain → create channel → resize → create app session');
 
         await service.startSession(depositAmount);
 
@@ -174,8 +178,8 @@ async function main() {
         console.log(`  Total spent: ${formatUSDCDisplay(sessionState.totalSpent)}`);
         console.log(`  Remaining balance: ${formatUSDCDisplay(sessionState.currentBalance)}`);
 
-        // Step 5: End session
-        console.log('\n[Step 5] Ending session (TX 2: Withdraw refund)...');
+        // Step 5: End session (close app session → close channel → withdraw)
+        console.log('\n[Step 5] Ending session (close app session → close channel → withdraw)...');
 
         const settlement = await service.endSession();
 
@@ -217,15 +221,19 @@ async function main() {
         console.log('\n' + '='.repeat(60));
         console.log('TEST COMPLETED SUCCESSFULLY');
         console.log('='.repeat(60));
-        console.log('\nOn-chain transactions (only 2!):');
-        console.log('  1. Deposit to custody');
-        console.log('  2. Withdraw refund');
-        console.log('\nOff-chain microtransactions (no gas!):');
-        console.log('  - Create App Session');
+        console.log('\nOn-chain transactions:');
+        console.log('  1. Deposit to custody (wallet → available balance)');
+        console.log('  2. Create channel (register with clearnode)');
+        console.log('  3. Resize/fund channel (available → channel-locked → unified balance)');
+        console.log('  4. Close channel (unified → available balance)');
+        console.log('  5. Withdraw refund (available → wallet)');
+        console.log('\nOff-chain operations (no gas!):');
+        console.log('  - Create App Session (unified → app session)');
         console.log('  - State updates on each song switch');
-        console.log('  - Close App Session with fund split');
+        console.log('  - Close App Session with fund split (app session → unified)');
+        console.log('  - Transfer relayer payment (user unified → relayer unified)');
         console.log('\nRelayer received:');
-        console.log('  - Funds in their custody (ready to withdraw)');
+        console.log('  - Funds in their unified balance (ready to withdraw)');
         console.log('  - ListeningActivity object for artist payouts');
 
         process.exit(0);

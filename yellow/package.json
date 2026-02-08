@@ -16,7 +16,9 @@
     "test:app-session": "tsx scripts/test-app-session-music.ts",
     "test:basic-channel": "tsx scripts/test-app-session-flow.ts",
     "relayer:withdraw": "tsx scripts/relayer-withdraw.ts",
-    "cleanup": "tsx scripts/cleanup-channels.ts"
+    "cleanup": "tsx scripts/cleanup-channels.ts",
+    "test:e2e": "tsx scripts/test-full-e2e.ts",
+    "test:arc-payments": "tsx scripts/test-arc-hub-payments.ts"
   },
   "keywords": [],
   "author": "",
