@@ -319,12 +319,20 @@ app.post('/session/end', async (req: Request, res: Response) => {
         session.service.disconnect();
         activeSessions.delete(userAddress);
 
+        // Convert BigInt values in listeningActivity to strings for JSON serialization
+        const serializedListeningActivity = settlement.listeningActivity?.map(item => ({
+            songListened: item.songListened,
+            amountSpent: typeof item.amountSpent === 'bigint'
+                ? formatBalance(item.amountSpent)
+                : item.amountSpent,
+        })) || [];
+
         res.json({
             success: true,
             settlement: {
                 totalSpent: formatBalance(settlement.sessionInfo?.totalSpent || 0n),
                 refundAmount: formatBalance(settlement.refundAmount),
-                listeningActivity: settlement.listeningActivity,
+                listeningActivity: serializedListeningActivity,
             },
         });
     } catch (error) {
