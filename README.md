@@ -31,6 +31,21 @@ LeStream is a decentralized music streaming platform that enables **real-time, p
 
 ---
 
+## 🏗️ Architecture
+
+The following diagram illustrates the complete flow from listener to artist payment:
+
+![LeStream Architecture](images/hackmoney.drawio.png)
+
+**Flow Summary:**
+1. **Artist Registration**: Artist registers ENS name with payout chain preference stored in text records
+2. **Channel Creation**: Listener creates a state channel with the Relayer, funds are locked in Yellow custody smart contract
+3. **Off-Chain Streaming**: Transfers and balance updates happen off-chain via Clearnode
+4. **Session Close**: When listener ends session, final state is signed and funds are distributed
+5. **Cross-Chain Payout**: Circle Gateway mints USDC on artist's preferred blockchain
+
+---
+
 ## 🚀 Key Features
 
 ### For Listeners
@@ -52,25 +67,29 @@ LeStream is a decentralized music streaming platform that enables **real-time, p
 ### Phase 1: Session Start (One On-Chain Transaction)
 1. Connect your Web3 wallet
 2. Deposit USDC into Yellow Network state channel
-3. Session created with your deposit
-4. Start listening immediately
+3. Relayer returns channel config with Clearnode signature
+4. Yellow custody smart contract verifies and locks funds
+5. Session activated - start listening immediately
 
 ### Phase 2: Active Listening (All Off-Chain)
 While streaming, micropayments happen entirely off-chain:
 
 1. **Play a Song**: Select and start playing
 2. **Per-Second Billing**: Balance decreases based on track's price-per-second
-3. **Switch Songs**: Each switch records listening data via off-chain state update
-4. **No Gas Fees**: All operations through Yellow Network
+3. **Switch Songs**: Each switch triggers off-chain transfer to Clearnode
+4. **Ledger Updates**: Clearnode validates, checks balance, allocates funds, and updates ledger
+5. **Balance Sync**: Both listener and relayer receive balance update notifications
 
 **Key Innovation**: When a listener stops listening to one song to listen to another, they submit an **off-chain microtransaction**. This records how long they listened and calculates the payment owed. The listener only signs an on-chain transaction **once** - when they completely stop listening.
 
 ### Phase 3: Session End (Final On-Chain Settlement)
-1. User clicks "End Session"
-2. Sum all off-chain micropayments
-3. Final state settled on-chain
-4. Funds distributed to artists via Circle Gateway
-5. Unused balance returned to listener
+1. User calls `close_channel` - sends request to Relayer
+2. Relayer signs final state and allocation
+3. Signature submitted to Yellow custody smart contract
+4. Contract verifies signature and distributes funds according to allocations
+5. Artist's share deposited to Circle Gateway
+6. Circle Gateway mints USDC on artist's preferred blockchain (read from ENS)
+7. Remaining balance returned to listener
 
 ---
 
