@@ -2,15 +2,7 @@
 
 > **A Music Streaming Platform Powered by Yellow Network, Circle Gateway, and ENS**
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://hack-money-2026-git-yz-frontend-choonxianggs-projects.vercel.app)
-[![ETHGlobal HackMoney 2026](https://img.shields.io/badge/ETHGlobal-HackMoney%202026-blue)](https://ethglobal.com)
-[![Yellow Network](https://img.shields.io/badge/Yellow-Network-yellow)](https://yellow.org)
-[![Circle](https://img.shields.io/badge/Circle-Gateway-00D4FF)](https://developers.circle.com/gateway)
-[![ENS](https://img.shields.io/badge/ENS-Integrated-5284FF)](https://ens.domains)
-
----
-
-## 🎵 Overview
+## Overview
 
 LeStream is a decentralized music streaming platform that enables **real-time, per-second micropayments** to artists using state channel technology.
 
@@ -31,7 +23,7 @@ LeStream is a decentralized music streaming platform that enables **real-time, p
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 The following diagram illustrates the complete flow from listener to artist payment:
 
@@ -46,7 +38,7 @@ The following diagram illustrates the complete flow from listener to artist paym
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 ### Screenshots
 
@@ -71,7 +63,7 @@ The following diagram illustrates the complete flow from listener to artist paym
 
 ---
 
-## 🎯 How It Works
+## How It Works
 
 ### Phase 1: Session Start (One On-Chain Transaction)
 1. Connect your Web3 wallet
@@ -102,7 +94,7 @@ While streaming, micropayments happen entirely off-chain:
 
 ---
 
-## 🌐 Yellow Network Integration
+## Yellow Network Integration
 
 ### Why Yellow Network for Music Streaming?
 
@@ -160,7 +152,7 @@ interface PlayEvent {
 
 ---
 
-## 🔄 Circle Gateway Integration
+## Circle Gateway Integration
 
 ### What is Circle Gateway?
 
@@ -219,7 +211,7 @@ interface TransferSpec {
 
 ---
 
-## 🏷️ ENS Integration
+## ENS Integration
 
 ### Why ENS for Music Streaming?
 
@@ -263,7 +255,7 @@ When a session ends:
 
 ---
 
-## 🎨 Artist Features
+## Artist Features
 
 ### Configuring Payout Settings
 
@@ -289,7 +281,7 @@ Each collaborator receives their percentage in native USDC on their preferred ch
 
 ---
 
-## 🛠️ Technical Architecture
+## Technical Architecture
 
 ### Frontend (Next.js 16)
 ```
@@ -321,7 +313,7 @@ Each collaborator receives their percentage in native USDC on their preferred ch
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 - Node.js 20+
@@ -375,7 +367,7 @@ Open http://localhost:3000
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Yellow Network
 ```bash
@@ -410,7 +402,7 @@ curl -X POST http://localhost:3001/session/end \
 
 ---
 
-## 🌍 Deployment
+## Deployment
 
 ### Live Demo
 **https://hack-money-2026-git-yz-frontend-choonxianggs-projects.vercel.app**
@@ -426,29 +418,29 @@ Host on Railway, Render, or DigitalOcean with WebSocket support.
 
 ---
 
-## 🏆 ETHGlobal HackMoney 2026 Prize Tracks
+## ETHGlobal HackMoney 2026 Prize Tracks
 
-### Yellow Network Prize ($15,000)
-- ✅ Session-based transactions with deposited funds
-- ✅ Off-chain micropayments for each song
-- ✅ On-chain settlement when session ends
-- ✅ Real-time Web2-like UX
+### Yellow Network Prize
+- Session-based transactions with deposited funds
+- Off-chain micropayments for each song
+- On-chain settlement when session ends
+- Real-time Web2-like UX
 
-### Circle Arc Prize ($5,000)
-- ✅ Chain abstraction via Circle Gateway
-- ✅ Cross-chain routing to artist's preferred chain
-- ✅ Unified user experience
-- ✅ Native USDC minting via attestation
+### Circle Arc Prize
+- Chain abstraction via Circle Gateway
+- Cross-chain routing to artist's preferred chain
+- Unified user experience
+- Native USDC minting via attestation
 
-### ENS Prize ($3,500 Pool + $1,500 Creative DeFi)
-- ✅ ENS name resolution for artist identities
-- ✅ Custom text records for payout chain preferences
-- ✅ Decentralized artist profiles
-- ✅ ENS preferences drive cross-chain payment routing
+### ENS Prize
+- ENS name resolution for artist identities
+- Custom text records for payout chain preferences
+- Decentralized artist profiles
+- ENS preferences drive cross-chain payment routing
 
 ---
 
-## 📚 Resources
+## Resources
 
 ### Yellow Network
 - [Documentation](https://docs.yellow.org/docs/learn)
@@ -464,7 +456,7 @@ Host on Railway, Render, or DigitalOcean with WebSocket support.
 
 ---
 
-## 📄 License
+## License
 
 MIT License
 
