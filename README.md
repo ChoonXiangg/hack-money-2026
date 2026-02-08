@@ -8,11 +8,11 @@
 
 ## 📸 Screenshots
 
-| Landing Page | Stream Credits (Yellow) |
+| Landing Page | Listen to Music |
 | :---: | :---: |
 | ![Landing Page](images/Screenshot%202026-02-08%20at%2008.02.23.png) | ![Stream Credits](images/Screenshot%202026-02-08%20at%2008.03.24.png) |
 
-| Deposit Flow | Pay-Per-Second |
+| Deposit Funds & Menu | Upload Song |
 | :---: | :---: |
 | ![Deposit Flow](images/Screenshot%202026-02-08%20at%2008.02.50.png) | ![Pay Per Second](images/Screenshot%202026-02-08%20at%2008.03.03.png) |
 
