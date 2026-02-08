@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { HoverBorderGradient } from "./ui/hover-border-gradient";
 import TextField from '@mui/material/TextField';
+import ListeningDashboard from "./ListeningDashboard";
 
 const SUPPORTED_CHAINS = [
     { id: "Arc_Testnet", name: "Arc" },
@@ -377,6 +378,9 @@ export default function StreamCredits() {
                             {actionMessage.text}
                         </div>
                     )}
+
+                    {/* Listening Activity Dashboard */}
+                    <ListeningDashboard />
                 </div>
             )}
         </div>
