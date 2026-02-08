@@ -48,6 +48,15 @@ The following diagram illustrates the complete flow from listener to artist paym
 
 ## 🚀 Key Features
 
+### Screenshots
+
+| Song Library | Upload Song | Music Player |
+|:---:|:---:|:---:|
+| ![Song Library](images/Screenshot%202026-02-08%20at%2014.21.33.png) | ![Upload Song](images/Screenshot%202026-02-08%20at%2014.21.45.png) | ![Music Player](images/Screenshot%202026-02-08%20at%2014.22.07.png) |
+| Browse tracks with per-second pricing | Artists upload music and set royalty preferences | Stream music with real-time micropayments |
+
+---
+
 ### For Listeners
 - **Gasless Streaming**: No transaction fees while listening
 - **Pay-Per-Second**: Only pay for what you actually listen to
