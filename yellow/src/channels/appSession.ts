@@ -382,21 +382,29 @@ function waitForAppSessionClose(
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             ws.off('message', handler);
+            console.log('  ✗ Close App Session timeout - no matching response received');
             reject(new Error('Close App Session timeout'));
         }, timeoutMs);
 
         const handler = (data: WebSocket.Data) => {
             try {
                 const msg = JSON.parse(data.toString());
+
+                // Debug: log all received messages during close
+                console.log('  [DEBUG] Received message during close:', JSON.stringify(msg, null, 2).substring(0, 500));
+
                 // Check for error response first (critical: msg.res[1] === 'error')
                 if (msg.res && msg.res[1] === 'error') {
                     const errorPayload = msg.res[2];
                     const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
                     clearTimeout(timeout);
                     ws.off('message', handler);
+                    console.log('  ✗ Close App Session error:', errorMsg);
                     reject(new Error(errorMsg));
                     return;
                 }
+
+                // Check for close_app_session response
                 if (msg.res && msg.res[1] === 'close_app_session') {
                     const payload = msg.res[2] as CloseAppSessionResponse;
                     if (payload.app_session_id === appSessionId) {
@@ -406,6 +414,19 @@ function waitForAppSessionClose(
                         resolve(payload);
                     }
                 }
+
+                // Also check for 'closed' response type (alternate response format)
+                if (msg.res && (msg.res[1] === 'closed' || msg.res[1] === 'app_session_closed')) {
+                    const payload = msg.res[2] as CloseAppSessionResponse;
+                    const sessionId = payload.app_session_id || (payload as any).session_id;
+                    if (sessionId === appSessionId) {
+                        clearTimeout(timeout);
+                        ws.off('message', handler);
+                        console.log('  ✓ App Session closed (alternate response)');
+                        resolve(payload);
+                    }
+                }
+
                 if (msg.error) {
                     clearTimeout(timeout);
                     ws.off('message', handler);
