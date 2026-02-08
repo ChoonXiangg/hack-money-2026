@@ -478,15 +478,35 @@ app.post('/session/stop', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'No active session' });
         }
 
-        const playEvent = await session.service.stopPlay();
+        const { playEvent, lastTransactionDetails: txDetails } = await session.service.stopPlay();
 
         const state = session.service.getSessionState();
+
+        // Build transaction details if we have transaction info from the microtransaction
+        let transactionDetails = null;
+        if (txDetails && txDetails.cost > 0n) {
+            const songs = loadSongs();
+            const song = songs.find(s => s.id === txDetails.songId);
+            const songName = song?.songName || 'Unknown Song';
+            const artistNames = song?.collaborators
+                .map(c => c.artistName)
+                .filter(Boolean)
+                .join(', ') || 'Unknown Artist';
+
+            transactionDetails = {
+                amount: formatBalance(txDetails.cost),
+                songName,
+                artistNames,
+                songId: txDetails.songId,
+            };
+        }
 
         res.json({
             success: true,
             playEvent,
             currentBalance: formatBalance(state.currentBalance),
             totalSpent: formatBalance(state.totalSpent),
+            transactionDetails,
         });
     } catch (error) {
         console.error('Error stopping play:', error);
@@ -496,6 +516,7 @@ app.post('/session/stop', async (req: Request, res: Response) => {
         });
     }
 });
+
 
 /**
  * POST /session/end
