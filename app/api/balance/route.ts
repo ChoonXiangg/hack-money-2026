@@ -1,41 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getChainBalance,
+  getUnifiedGatewayBalance,
+  formatUSDC,
+  USDC_ADDRESSES,
+} from "@/lib/gateway";
+import type { Address } from "viem";
 
-// balanceOf(address) function selector
-const BALANCE_OF_SELECTOR = "0x70a08231";
-
-const CHAINS = [
-  {
-    name: "Ethereum Sepolia",
-    rpc: "https://ethereum-sepolia-rpc.publicnode.com",
-    usdc: "0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb", // ytest.usd token (Yellow Network sandbox USDC)
-  },
-];
-
-async function getBalanceOf(
-  rpc: string,
-  usdcAddress: string,
-  walletAddress: string
-): Promise<bigint> {
-  const paddedAddress = walletAddress.replace("0x", "").padStart(64, "0");
-  const data = `${BALANCE_OF_SELECTOR}${paddedAddress}`;
-
-  const response = await fetch(rpc, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [{ to: usdcAddress, data }, "latest"],
-      id: 1,
-    }),
-  });
-
-  const result = await response.json();
-  if (result.result) {
-    return BigInt(result.result);
-  }
-  return 0n;
-}
+// All supported chains with their USDC addresses
+const CHAINS = Object.entries(USDC_ADDRESSES).map(([name, usdc]) => ({
+  name: name.replace(/_/g, " "),
+  id: name,
+  usdc,
+}));
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
@@ -45,34 +22,47 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const results = await Promise.allSettled(
-      CHAINS.map(async (chain) => {
-        const raw = await getBalanceOf(chain.rpc, chain.usdc, address);
-        return { name: chain.name, raw };
-      })
-    );
+    const addr = address as Address;
 
-    let totalRaw = 0n;
-    const chainBalances: { chain: string; balance: string }[] = [];
+    // Fetch on-chain balances for all chains + Gateway unified balance in parallel
+    const [gatewayResult, ...chainResults] = await Promise.allSettled([
+      getUnifiedGatewayBalance(addr),
+      ...CHAINS.map(async (chain) => {
+        const raw = await getChainBalance(chain.id, addr);
+        return { name: chain.name, id: chain.id, raw };
+      }),
+    ]);
 
-    for (const result of results) {
+    // Process per-chain on-chain balances
+    let totalRaw = BigInt(0);
+    const chainBalances: { chain: string; chainId: string; balance: string }[] = [];
+
+    for (const result of chainResults) {
       if (result.status === "fulfilled") {
-        const { name, raw } = result.value;
-        const whole = raw / 1_000_000n;
-        const decimal = raw % 1_000_000n;
+        const { name, id, raw } = result.value as { name: string; id: string; raw: bigint };
         chainBalances.push({
           chain: name,
-          balance: `${whole}.${decimal.toString().padStart(6, "0")}`,
+          chainId: id,
+          balance: formatUSDC(raw),
         });
         totalRaw += raw;
       }
     }
 
-    const totalWhole = totalRaw / 1_000_000n;
-    const totalDecimal = totalRaw % 1_000_000n;
-    const total = `${totalWhole}.${totalDecimal.toString().padStart(6, "0")}`;
+    // Process Gateway balance
+    const gateway =
+      gatewayResult.status === "fulfilled"
+        ? gatewayResult.value
+        : { perChain: {}, totalAvailable: "0.000000" };
 
-    return NextResponse.json({ total, chainBalances });
+    return NextResponse.json({
+      total: formatUSDC(totalRaw),
+      chainBalances,
+      gateway: {
+        perChain: gateway.perChain,
+        totalAvailable: gateway.totalAvailable,
+      },
+    });
   } catch (error) {
     console.error("Balance fetch error:", error);
     return NextResponse.json(

@@ -8,7 +8,7 @@ const MODULE = "badge";
 const RPC_URL = getJsonRpcFullnodeUrl("testnet");
 
 function getClient() {
-  return new SuiJsonRpcClient({ url: RPC_URL });
+  return new SuiJsonRpcClient({ url: RPC_URL, network: "testnet" });
 }
 
 function getAdminKeypair(): Ed25519Keypair {

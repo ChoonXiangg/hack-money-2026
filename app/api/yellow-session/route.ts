@@ -98,11 +98,12 @@ export async function GET(request: NextRequest) {
       args: [[address as Address], [TOKEN_ADDRESS]],
     });
 
-    const custodyBalance = balances[0] || 0n;
+    const custodyBalance = balances[0] || BigInt(0);
 
     // Format balance (6 decimals for USDC)
-    const whole = custodyBalance / 1_000_000n;
-    const decimal = custodyBalance % 1_000_000n;
+    const million = BigInt(1000000);
+    const whole = custodyBalance / million;
+    const decimal = custodyBalance % million;
     const formatted = `${whole}.${decimal.toString().padStart(6, "0")}`;
 
     return NextResponse.json({
