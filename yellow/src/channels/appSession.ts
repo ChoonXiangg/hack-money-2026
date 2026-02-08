@@ -470,6 +470,44 @@ export async function startAppSession(
     console.log(`  Relayer: ${relayerAddress}`);
     console.log(`  Deposit: ${formatUSDCDisplay(depositAmount)}`);
 
+    // ── Step 0: Check for and close any existing open channels ──
+    console.log('\n  [Step 0] Checking for existing open channels...');
+    try {
+        const existingChannels = await client.getOpenChannels();
+        if (existingChannels.length > 0) {
+            console.log(`    Found ${existingChannels.length} existing open channel(s)`);
+            for (const existingChannelId of existingChannels) {
+                console.log(`    Closing existing channel: ${existingChannelId}`);
+                try {
+                    // Send close channel request via WebSocket
+                    await sendCloseChannelRequest({
+                        ws,
+                        sessionKeyPair,
+                        channelId: existingChannelId,
+                        fundsDestination: userAddress,
+                    });
+
+                    // Wait for ClearNode confirmation
+                    const closeResponse = await waitForCloseConfirmation(ws, existingChannelId, 30000);
+
+                    // Submit close to blockchain
+                    await submitCloseToBlockchain(client, publicClient, closeResponse, 3);
+                    console.log(`    ✓ Closed existing channel: ${existingChannelId}`);
+
+                    // Wait a moment for state to settle
+                    await new Promise(r => setTimeout(r, 2000));
+                } catch (closeErr) {
+                    console.log(`    ⚠ Could not close channel ${existingChannelId}: ${closeErr}`);
+                    // Continue anyway - maybe the channel is already marked closed on clearnode
+                }
+            }
+        } else {
+            console.log('    No existing open channels found');
+        }
+    } catch (err) {
+        console.log(`    ⚠ Could not check for open channels: ${err}`);
+    }
+
     // ── Step 1: Deposit to custody (on-chain: wallet → available balance) ──
     console.log('\n  [Step 1] Deposit to custody (on-chain)...');
     const walletBalance = await getTokenBalance(publicClient, DEFAULT_TOKEN_ADDRESS, userAddress);
