@@ -32,10 +32,23 @@ export default function StreamCredits() {
             const res = await fetch(`/api/yellow-session?address=${encodeURIComponent(walletAddress)}`);
             const data = await res.json();
 
-            if (res.ok && data.formatted) {
-                // Parse and format to 4 decimal places for display
-                const balance = parseFloat(data.formatted);
-                setCredits(balance.toFixed(4));
+            if (res.ok) {
+                // Prefer userAllocationAmount (app session allocation) if available
+                if (data.userAllocationAmount && data.userAllocationAmount !== '0') {
+                    // Format the allocation amount (it's in wei, needs to be divided by 1e6)
+                    const amountBigInt = BigInt(data.userAllocationAmount);
+                    const million = BigInt(1000000);
+                    const whole = amountBigInt / million;
+                    const decimal = amountBigInt % million;
+                    const formatted = `${whole}.${decimal.toString().padStart(6, '0')}`;
+                    setCredits(parseFloat(formatted).toFixed(4));
+                } else if (data.formatted) {
+                    // Fall back to session/custody balance
+                    const balance = parseFloat(data.formatted);
+                    setCredits(balance.toFixed(4));
+                } else {
+                    setCredits("0.0000");
+                }
             } else {
                 console.error("Failed to fetch Yellow balance:", data.error);
                 setError(true);
@@ -90,14 +103,14 @@ export default function StreamCredits() {
 
         window.addEventListener("walletChanged", handleWalletChange);
 
-        // Refresh balance every 10 seconds if wallet is connected
+        // Refresh balance every 5 seconds if wallet is connected
         const interval = setInterval(() => {
             const walletAddress = localStorage.getItem("walletAddress");
             if (walletAddress) {
                 fetchYellowBalance(walletAddress);
                 fetchMultiChainBalance(walletAddress);
             }
-        }, 10000);
+        }, 5000);
 
         return () => {
             window.removeEventListener("walletChanged", handleWalletChange);
@@ -331,11 +344,10 @@ export default function StreamCredits() {
 
                     {/* Action Message */}
                     {actionMessage && (
-                        <div className={`text-xs font-[family-name:var(--font-murecho)] p-2 rounded ${
-                            actionMessage.type === 'success'
+                        <div className={`text-xs font-[family-name:var(--font-murecho)] p-2 rounded ${actionMessage.type === 'success'
                                 ? 'bg-green-900/30 text-green-300'
                                 : 'bg-red-900/30 text-red-300'
-                        }`}>
+                            }`}>
                             {actionMessage.text}
                         </div>
                     )}

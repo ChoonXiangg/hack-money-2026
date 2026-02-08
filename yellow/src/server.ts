@@ -175,10 +175,18 @@ app.get('/session/balance', (req: Request, res: Response) => {
                 hasActiveSession: false,
                 balance: '0.0000',
                 formatted: '0.0000',
+                allocations: [],
             });
         }
 
         const state = session.service.getSessionState();
+        const allocations = session.service.getAppSessionAllocations();
+
+        // Find user's allocation amount
+        const userAllocation = allocations.find(
+            (a: { participant: string; asset: string; amount: string }) => a.participant.toLowerCase() === address.toLowerCase()
+        );
+        const userAllocationAmount = userAllocation?.amount || '0';
 
         res.json({
             hasActiveSession: state.status === 'active',
@@ -187,6 +195,8 @@ app.get('/session/balance', (req: Request, res: Response) => {
             formatted: formatBalance(state.currentBalance),
             totalSpent: formatBalance(state.totalSpent),
             depositAmount: formatBalance(state.depositAmount),
+            allocations, // Array of { participant, asset, amount }
+            userAllocationAmount, // User's current allocation in the app session
         });
     } catch (error) {
         console.error('Error getting session balance:', error);
