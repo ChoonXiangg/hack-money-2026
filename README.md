@@ -10,11 +10,11 @@
 
 | Landing Page | Stream Credits (Yellow) |
 | :---: | :---: |
-| ![Landing Page](/Users/choonxiang/Documents/hack-money-2026/images/Screenshot%202026-02-08%20at%2008.02.23.png) | ![Stream Credits](/Users/choonxiang/Documents/hack-money-2026/images/Screenshot%202026-02-08%20at%2008.03.24.png) |
+| ![Landing Page](images/Screenshot%202026-02-08%20at%2008.02.23.png) | ![Stream Credits](images/Screenshot%202026-02-08%20at%2008.03.24.png) |
 
 | Deposit Flow | Pay-Per-Second |
 | :---: | :---: |
-| ![Deposit Flow](/Users/choonxiang/Documents/hack-money-2026/images/Screenshot%202026-02-08%20at%2008.02.50.png) | ![Pay Per Second](/Users/choonxiang/Documents/hack-money-2026/images/Screenshot%202026-02-08%20at%2008.03.03.png) |
+| ![Deposit Flow](images/Screenshot%202026-02-08%20at%2008.02.50.png) | ![Pay Per Second](images/Screenshot%202026-02-08%20at%2008.03.03.png) |
 
 ---
 
