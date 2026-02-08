@@ -231,33 +231,6 @@ export default function StreamCredits() {
             {isExpanded && (
                 <div className="px-5 pb-4 border-t border-white/10 mt-2">
                     {/* Multi-Chain Balances */}
-                    {chainBalances.length > 0 && (
-                        <div className="mt-3 mb-3 p-2 bg-white/5 rounded-lg">
-                            <p className="text-xs text-white/60 mb-1.5 font-[family-name:var(--font-murecho)]">
-                                USDC Balances (via Gateway)
-                            </p>
-                            {chainBalances.map((cb) => (
-                                <div key={cb.chain} className="flex justify-between text-xs font-[family-name:var(--font-murecho)]">
-                                    <span className="text-white/50">{cb.chain}</span>
-                                    <span className="text-white/80">{parseFloat(cb.balance).toFixed(4)}</span>
-                                </div>
-                            ))}
-                            {gatewayBalance && (
-                                <div className="flex justify-between text-xs font-[family-name:var(--font-murecho)] mt-1 pt-1 border-t border-white/10">
-                                    <span className="text-blue-400">Gateway Unified</span>
-                                    <span className="text-blue-300">{parseFloat(gatewayBalance).toFixed(4)}</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Warning Banner */}
-                    <div className="mt-3 mb-3 p-2 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
-                        <p className="text-xs text-yellow-300 font-[family-name:var(--font-murecho)]">
-                            ⚠️ <strong>Testnet Only:</strong> Enter your private key to deposit and start a Yellow Network streaming session.
-                        </p>
-                    </div>
-
                     {/* Chain Selector */}
                     <div className="mb-3">
                         <label className="block text-xs text-white/60 mb-2 font-[family-name:var(--font-murecho)]">

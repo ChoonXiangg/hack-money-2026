@@ -17,7 +17,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import Grainient from "@/components/ui/Grainient";
+
 import ElasticSlider from "@/components/ElasticSlider";
 
 interface Song {
@@ -304,33 +304,7 @@ export default function ListenPage({
   if (!song) {
     return (
       <div className="relative flex min-h-screen items-center justify-center">
-        <div className="fixed inset-0">
-          <Grainient
-            color1="#FF9FFC"
-            color2="#8B5CF6"
-            color3="#5227FF"
-            timeSpeed={0.15}
-            colorBalance={0}
-            warpStrength={1}
-            warpFrequency={5}
-            warpSpeed={1.5}
-            warpAmplitude={50}
-            blendAngle={0}
-            blendSoftness={0.05}
-            rotationAmount={500}
-            noiseScale={2}
-            grainAmount={0.08}
-            grainScale={2}
-            grainAnimated={false}
-            contrast={1.4}
-            gamma={1}
-            saturation={1.1}
-            centerX={0}
-            centerY={0}
-            zoom={0.9}
-          />
-        </div>
-        <p className="relative z-10 text-xl text-black/60">Loading...</p>
+          <p className="relative z-10 text-xl text-black/60">Loading...</p>
       </div>
     );
   }
@@ -340,34 +314,6 @@ export default function ListenPage({
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Grainient Background */}
-      <div className="fixed inset-0">
-        <Grainient
-          color1="#FF9FFC"
-          color2="#8B5CF6"
-          color3="#5227FF"
-          timeSpeed={0.15}
-          colorBalance={0}
-          warpStrength={1}
-          warpFrequency={5}
-          warpSpeed={1.5}
-          warpAmplitude={50}
-          blendAngle={0}
-          blendSoftness={0.05}
-          rotationAmount={500}
-          noiseScale={2}
-          grainAmount={0.08}
-          grainScale={2}
-          grainAnimated={false}
-          contrast={1.4}
-          gamma={1}
-          saturation={1.1}
-          centerX={0}
-          centerY={0}
-          zoom={0.9}
-        />
-      </div>
-
       {/* Hidden Audio Element */}
       <audio
         ref={audioRef}
