@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Play, Pause, CheckCircle, XCircle, AlertTriangle, Award } from "lucide-react";
 import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
+import CollaboratorsList from "@/components/CollaboratorsList";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +24,7 @@ interface Song {
   id: string;
   songName: string;
   pricePerSecond: string;
-  collaborators: { artistName: string; address: string; blockchain: string; percentage?: number }[];
+  collaborators: { artistName: string; address: string; ensName?: string; blockchain: string; percentage?: number }[];
   songFile: string;
   imageFile: string;
   createdAt: string;
@@ -454,6 +455,12 @@ export default function ListenPage({
               onChange={handleSliderChange}
             />
           </div>
+
+          {/* Collaborators with ENS */}
+          <CollaboratorsList
+            collaborators={song.collaborators}
+            className="w-[500px] mt-4"
+          />
         </div>
       </div>
       {/* Payment Result Popup */}

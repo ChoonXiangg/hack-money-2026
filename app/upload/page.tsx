@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
 import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
+import ENSAddressInput from "@/components/ENSAddressInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Grainient from "@/components/ui/Grainient";
+import { resolveToAddress, isValidAddress, isENSName } from "@/lib/ens";
 
 // Arc supported testnets from arc/src/chains.js
 const SUPPORTED_TESTNETS = [
@@ -178,6 +180,34 @@ export default function UploadPage() {
     setUploadStatus("idle");
 
     try {
+      // Resolve all ENS names to addresses before submitting
+      const resolvedCollaborators = await Promise.all(
+        collaborators.map(async ({ artistName, address, blockchain, percentage }) => {
+          let resolvedAddress = address;
+          let ensName: string | undefined;
+
+          // If it's an ENS name, resolve it
+          if (isENSName(address)) {
+            ensName = address;
+            const resolved = await resolveToAddress(address);
+            if (!resolved) {
+              throw new Error(`Could not resolve ENS name: ${address}`);
+            }
+            resolvedAddress = resolved;
+          } else if (!isValidAddress(address)) {
+            throw new Error(`Invalid address: ${address}`);
+          }
+
+          return {
+            artistName,
+            address: resolvedAddress.toLowerCase(),
+            ensName, // Store original ENS name for display
+            blockchain,
+            percentage,
+          };
+        })
+      );
+
       const formData = new FormData();
       formData.append("songFile", songFile);
       if (imageFile) {
@@ -185,14 +215,7 @@ export default function UploadPage() {
       }
       formData.append("songName", songName);
       formData.append("pricePerSecond", pricePerSecond);
-      formData.append("collaborators", JSON.stringify(
-        collaborators.map(({ artistName, address, blockchain, percentage }) => ({
-          artistName,
-          address,
-          blockchain,
-          percentage,
-        }))
-      ));
+      formData.append("collaborators", JSON.stringify(resolvedCollaborators));
 
       const response = await fetch("/api/upload", {
         method: "POST",
@@ -291,38 +314,37 @@ export default function UploadPage() {
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 backdrop-blur-sm transition-all ${
-                isDragging
-                  ? "border-black bg-black/15"
-                  : "border-black/50 bg-black/5 hover:border-black hover:bg-black/10"
-              }`}
+              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 backdrop-blur-sm transition-all ${isDragging
+                ? "border-black bg-black/15"
+                : "border-black/50 bg-black/5 hover:border-black hover:bg-black/10"
+                }`}
             >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            {songFile ? (
-              <div className="flex flex-col items-center gap-3">
-                <Music className="h-12 w-12 text-black" />
-                <p className="text-lg font-medium text-black">{songFile.name}</p>
-                <p className="text-sm text-black/70">
-                  {(songFile.size / (1024 * 1024)).toFixed(2)} MB
-                </p>
-              </div>
-            ) : (
-              <>
-                <Music className="mb-4 h-12 w-12 text-black/80" />
-                <p className="text-lg font-medium text-black">
-                  Click to Upload or Drag and Drop
-                </p>
-                <p className="mt-1 text-sm text-black/70">
-                  MP3, WAV, AAC
-                </p>
-              </>
-            )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              {songFile ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Music className="h-12 w-12 text-black" />
+                  <p className="text-lg font-medium text-black">{songFile.name}</p>
+                  <p className="text-sm text-black/70">
+                    {(songFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Music className="mb-4 h-12 w-12 text-black/80" />
+                  <p className="text-lg font-medium text-black">
+                    Click to Upload or Drag and Drop
+                  </p>
+                  <p className="mt-1 text-sm text-black/70">
+                    MP3, WAV, AAC
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -334,39 +356,38 @@ export default function UploadPage() {
               onDragOver={handleImageDragOver}
               onDragLeave={handleImageDragLeave}
               onDrop={handleImageDrop}
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 backdrop-blur-sm transition-all ${
-                isImageDragging
-                  ? "border-black bg-black/15"
-                  : "border-black/50 bg-black/5 hover:border-black hover:bg-black/10"
-              }`}
+              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 backdrop-blur-sm transition-all ${isImageDragging
+                ? "border-black bg-black/15"
+                : "border-black/50 bg-black/5 hover:border-black hover:bg-black/10"
+                }`}
             >
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              className="hidden"
-            />
-            {imagePreview ? (
-              <div className="flex flex-col items-center gap-3">
-                <img
-                  src={imagePreview}
-                  alt="Song cover preview"
-                  className="h-32 w-32 rounded-lg object-cover"
-                />
-                <p className="text-sm font-medium text-black">{imageFile?.name}</p>
-              </div>
-            ) : (
-              <>
-                <ImageIcon className="mb-4 h-12 w-12 text-black/80" />
-                <p className="text-lg font-medium text-black">
-                  Click to Upload or Drag and Drop
-                </p>
-                <p className="mt-1 text-sm text-black/70">
-                  PNG, JPEG, WEBP
-                </p>
-              </>
-            )}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              {imagePreview ? (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={imagePreview}
+                    alt="Song cover preview"
+                    className="h-32 w-32 rounded-lg object-cover"
+                  />
+                  <p className="text-sm font-medium text-black">{imageFile?.name}</p>
+                </div>
+              ) : (
+                <>
+                  <ImageIcon className="mb-4 h-12 w-12 text-black/80" />
+                  <p className="text-lg font-medium text-black">
+                    Click to Upload or Drag and Drop
+                  </p>
+                  <p className="mt-1 text-sm text-black/70">
+                    PNG, JPEG, WEBP
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -465,20 +486,19 @@ export default function UploadPage() {
                       />
                     </div>
 
-                    {/* Address */}
+                    {/* Address or ENS Name */}
                     <div className="space-y-1">
-                      <Label className="text-xs text-black/70">Address</Label>
-                      <Input
-                        type="text"
-                        placeholder="0x..."
+                      <Label className="text-xs text-black/70">Address or ENS</Label>
+                      <ENSAddressInput
                         value={collaborator.address}
-                        onChange={(e) =>
+                        onChange={(value) =>
                           updateCollaborator(
                             collaborator.id,
                             "address",
-                            e.target.value
+                            value
                           )
                         }
+                        placeholder="0x... or name.eth"
                         className="border-black/20 bg-black/5 font-mono text-black placeholder:text-black/40 focus:border-black/50"
                       />
                     </div>
