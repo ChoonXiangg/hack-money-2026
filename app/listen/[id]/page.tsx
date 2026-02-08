@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, use } from "react";
+import { useEffect, useRef, useState, use, useCallback } from "react";
+import { useTransactions } from "@/context/TransactionContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Play, Pause, CheckCircle, XCircle, AlertTriangle, Award } from "lucide-react";
@@ -16,7 +17,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import Grainient from "@/components/ui/Grainient";
+
 import ElasticSlider from "@/components/ElasticSlider";
 
 interface Song {
@@ -111,8 +112,10 @@ export default function ListenPage({
     }
   };
 
+  const { addTransaction } = useTransactions();
+
   // Stop Yellow play tracking (triggers microtransaction)
-  const stopYellowPlay = async () => {
+  const stopYellowPlay = useCallback(async () => {
     if (!yellowPlayStartedRef.current) return;
 
     const walletAddress = localStorage.getItem("walletAddress");
@@ -129,13 +132,22 @@ export default function ListenPage({
         const data = await res.json();
         if (data.success) {
           console.log("[Yellow] Microtransaction completed", data);
+
+          // Trigger toast notification if we have transaction details
+          if (data.transactionDetails) {
+            addTransaction({
+              amount: data.transactionDetails.amount,
+              songName: data.transactionDetails.songName,
+              artistNames: data.transactionDetails.artistNames,
+            });
+          }
         }
       }
       yellowPlayStartedRef.current = false;
     } catch (err) {
       console.log("[Yellow] Failed to stop play:", err);
     }
-  };
+  }, [addTransaction]);
 
   const handlePlay = async () => {
     if (!audioRef.current) return;
@@ -292,33 +304,7 @@ export default function ListenPage({
   if (!song) {
     return (
       <div className="relative flex min-h-screen items-center justify-center">
-        <div className="fixed inset-0">
-          <Grainient
-            color1="#FF9FFC"
-            color2="#8B5CF6"
-            color3="#5227FF"
-            timeSpeed={0.15}
-            colorBalance={0}
-            warpStrength={1}
-            warpFrequency={5}
-            warpSpeed={1.5}
-            warpAmplitude={50}
-            blendAngle={0}
-            blendSoftness={0.05}
-            rotationAmount={500}
-            noiseScale={2}
-            grainAmount={0.08}
-            grainScale={2}
-            grainAnimated={false}
-            contrast={1.4}
-            gamma={1}
-            saturation={1.1}
-            centerX={0}
-            centerY={0}
-            zoom={0.9}
-          />
-        </div>
-        <p className="relative z-10 text-xl text-black/60">Loading...</p>
+          <p className="relative z-10 text-xl text-black/60">Loading...</p>
       </div>
     );
   }
@@ -328,34 +314,6 @@ export default function ListenPage({
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Grainient Background */}
-      <div className="fixed inset-0">
-        <Grainient
-          color1="#FF9FFC"
-          color2="#8B5CF6"
-          color3="#5227FF"
-          timeSpeed={0.15}
-          colorBalance={0}
-          warpStrength={1}
-          warpFrequency={5}
-          warpSpeed={1.5}
-          warpAmplitude={50}
-          blendAngle={0}
-          blendSoftness={0.05}
-          rotationAmount={500}
-          noiseScale={2}
-          grainAmount={0.08}
-          grainScale={2}
-          grainAnimated={false}
-          contrast={1.4}
-          gamma={1}
-          saturation={1.1}
-          centerX={0}
-          centerY={0}
-          zoom={0.9}
-        />
-      </div>
-
       {/* Hidden Audio Element */}
       <audio
         ref={audioRef}
@@ -370,8 +328,6 @@ export default function ListenPage({
         position="right"
         items={[
           { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
-          { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
-          { label: "My Top Listeners", ariaLabel: "View your top listeners", link: "/top-listeners" },
         ]}
         displaySocials={false}
         displayItemNumbering={false}

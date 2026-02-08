@@ -803,8 +803,33 @@ export async function endAppSession(
     console.log('  Waiting for off-chain close to process...');
     await new Promise(r => setTimeout(r, 5000));
 
-    // ── Step 2: Off-chain transfer (relayer payment: user's unified → relayer's unified) ──
-    console.log(`\n  [Step 2] Off-chain transfer: sending relayer payment to relayer's unified balance...`);
+    // ── Step 2: Close channel (on-chain: unified balance → available/custody balance) ──
+    // Must happen BEFORE off-chain transfer to release funds from channel-locked state
+    console.log(`\n  [Step 2] Closing channel (on-chain: unified → available balance)...`);
+    console.log(`    Channel ID: ${channelId}`);
+
+    let closeTxHash: Hash | undefined;
+    try {
+        await sendCloseChannelRequest({
+            ws,
+            sessionKeyPair,
+            channelId,
+            fundsDestination: userAddress,
+        });
+
+        const closeChannelResponse = await waitForCloseConfirmation(ws, channelId);
+        closeTxHash = await submitCloseToBlockchain(client, publicClient, closeChannelResponse);
+        console.log(`    ✓ Channel closed on-chain: ${closeTxHash}`);
+
+        // Wait for close to settle
+        await new Promise(r => setTimeout(r, 5000));
+    } catch (err) {
+        console.log(`    ⚠ Channel close failed: ${err}`);
+        console.log(`    Continuing with off-chain transfer...`);
+    }
+
+    // ── Step 3: Off-chain transfer (relayer payment: user's unified → relayer's unified) ──
+    console.log(`\n  [Step 3] Off-chain transfer: sending relayer payment to relayer's unified balance...`);
 
     if (relayerPayment > 0n) {
         console.log(`    From: ${userAddress}`);
@@ -838,30 +863,6 @@ export async function endAppSession(
         await new Promise(r => setTimeout(r, 2000));
     } else {
         console.log(`    No payment for relayer (user spent nothing)`);
-    }
-
-    // ── Step 3: Close channel (on-chain: unified balance → available/custody balance) ──
-    console.log(`\n  [Step 3] Closing channel (on-chain: unified → available balance)...`);
-    console.log(`    Channel ID: ${channelId}`);
-
-    let closeTxHash: Hash | undefined;
-    try {
-        await sendCloseChannelRequest({
-            ws,
-            sessionKeyPair,
-            channelId,
-            fundsDestination: userAddress,
-        });
-
-        const closeChannelResponse = await waitForCloseConfirmation(ws, channelId);
-        closeTxHash = await submitCloseToBlockchain(client, publicClient, closeChannelResponse);
-        console.log(`    ✓ Channel closed on-chain: ${closeTxHash}`);
-
-        // Wait for close to settle
-        await new Promise(r => setTimeout(r, 5000));
-    } catch (err) {
-        console.log(`    ⚠ Channel close failed: ${err}`);
-        console.log(`    Continuing with withdrawal...`);
     }
 
     // ── Step 4: User withdraws refund from custody (on-chain: available → wallet) ──

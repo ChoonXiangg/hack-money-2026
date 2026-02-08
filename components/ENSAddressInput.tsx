@@ -1,12 +1,14 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { useENSAddress, useENSAvatar, isENSName, isValidAddress } from "@/lib/ens";
+import { useENSAddress, useENSAvatar, usePayoutChainPreference, isENSName, isValidAddress } from "@/lib/ens";
 import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 
 interface ENSAddressInputProps {
     value: string;
     onChange: (value: string) => void;
+    onPayoutChainResolved?: (chain: string) => void;
     placeholder?: string;
     className?: string;
 }
@@ -18,14 +20,25 @@ interface ENSAddressInputProps {
 export default function ENSAddressInput({
     value,
     onChange,
+    onPayoutChainResolved,
     placeholder = "0x... or name.eth",
     className = "",
 }: ENSAddressInputProps) {
     const { address: resolvedAddress, isLoading, error } = useENSAddress(value);
     const { avatar } = useENSAvatar(isENSName(value) ? value : undefined);
+    const { text: payoutChain } = usePayoutChainPreference(isENSName(value) ? value : undefined);
 
     const showENSStatus = value && isENSName(value);
     const isValid = isValidAddress(value) || (isENSName(value) && resolvedAddress);
+
+    const callbackRef = useRef(onPayoutChainResolved);
+    callbackRef.current = onPayoutChainResolved;
+
+    useEffect(() => {
+        if (payoutChain && callbackRef.current) {
+            callbackRef.current(payoutChain);
+        }
+    }, [payoutChain]);
 
     return (
         <div className="space-y-1">

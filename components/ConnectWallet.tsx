@@ -9,6 +9,7 @@ import {
   DropdownItem,
 } from "@heroui/react";
 import { BrowserProvider } from "ethers";
+import { HoverBorderGradient } from "./ui/hover-border-gradient";
 
 declare global {
   interface Window {
@@ -140,59 +141,63 @@ export default function ConnectWallet() {
   // If not connected, show connect button
   if (!address) {
     return (
-      <button
-        onClick={connectMetaMask}
-        disabled={isConnecting}
-        className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl font-[family-name:var(--font-climate)] disabled:opacity-50"
-        style={{ borderRadius: "12px" }}
-      >
-        {isConnecting ? (
-          <span className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Connecting...
-          </span>
-        ) : (
-          "Connect Wallet"
-        )}
-      </button>
+      <div className="min-w-[240px]">
+        <HoverBorderGradient
+          containerClassName="rounded-full w-full"
+          as="button"
+          className="bg-black text-white flex items-center justify-center w-full font-[family-name:var(--font-climate)] text-sm px-5 py-3"
+          onClick={connectMetaMask}
+          disabled={isConnecting}
+        >
+          {isConnecting ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Connecting...
+            </span>
+          ) : (
+            "Connect Wallet"
+          )}
+        </HoverBorderGradient>
+      </div>
     );
   }
 
   // If connected, show address with dropdown for disconnect
   return (
-    <Dropdown>
-      <DropdownTrigger>
-        <button
-          className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl font-[family-name:var(--font-climate)]"
-          style={{ borderRadius: "12px" }}
-        >
-          <span className="flex items-center gap-2">
-            {truncated}
-            {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : balance ? (
-              <span className="font-[family-name:var(--font-murecho)] text-xs font-normal text-white/70">
-                {parseFloat(balance).toFixed(2)} USDC
+    <div className="min-w-[240px]">
+      <Dropdown>
+        <DropdownTrigger>
+          <div>
+            <HoverBorderGradient
+              containerClassName="rounded-full w-full"
+              as="button"
+              className="bg-black text-white flex items-center w-full font-[family-name:var(--font-climate)] text-sm px-5 py-3"
+            >
+              <span className="flex items-center gap-2">
+                {truncated}
+                <span className="font-[family-name:var(--font-murecho)] text-xs font-normal text-white/70">
+                  {balance ? `${parseFloat(balance).toFixed(2)} USDC` : ''}
+                </span>
               </span>
-            ) : null}
-          </span>
-        </button>
-      </DropdownTrigger>
-      <DropdownMenu
-        aria-label="Wallet actions"
-        className="bg-black rounded-xl text-white"
-        itemClasses={{
-          base: "data-[hover=true]:bg-white/10",
-        }}
-      >
-        <DropdownItem
-          key="disconnect"
-          onClick={handleDisconnect}
-          className="text-red-400"
+            </HoverBorderGradient>
+          </div>
+        </DropdownTrigger>
+        <DropdownMenu
+          aria-label="Wallet actions"
+          className="bg-black rounded-xl text-white"
+          itemClasses={{
+            base: "data-[hover=true]:bg-white/10",
+          }}
         >
-          Disconnect Wallet
-        </DropdownItem>
-      </DropdownMenu>
-    </Dropdown>
+          <DropdownItem
+            key="disconnect"
+            onClick={handleDisconnect}
+            className="text-red-400"
+          >
+            Disconnect Wallet
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+    </div>
   );
 }

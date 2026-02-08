@@ -842,9 +842,23 @@ export class YellowService extends EventEmitter {
 
     /**
      * Stop the current play and optionally submit microtransaction
+     * Returns playEvent and lastTransactionDetails for notification purposes
      */
-    async stopPlay(): Promise<PlayEvent | null> {
+    async stopPlay(): Promise<{
+        playEvent: PlayEvent | null;
+        lastTransactionDetails: { songId: string; cost: bigint } | null;
+    }> {
         const currentPlay = this.sessionManager.getCurrentPlay();
+
+        // Capture transaction details BEFORE microtransaction (which stops the play)
+        let lastTransactionDetails: { songId: string; cost: bigint } | null = null;
+
+        if (currentPlay && currentPlay.totalCost > 0n) {
+            lastTransactionDetails = {
+                songId: currentPlay.songId,
+                cost: currentPlay.totalCost,
+            };
+        }
 
         // Submit microtransaction before stopping if there's cost
         if (currentPlay && currentPlay.totalCost > 0n && this.config.useAppSessions && this.appSessionId) {
@@ -853,7 +867,8 @@ export class YellowService extends EventEmitter {
 
         const playEvent = this.sessionManager.stopCurrentPlay();
         this.emit('session:updated', this.sessionManager.getState());
-        return playEvent;
+
+        return { playEvent, lastTransactionDetails };
     }
 
     /**
