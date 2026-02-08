@@ -6,7 +6,7 @@ import { Plus, X, Music, ImageIcon, Loader2 } from "lucide-react";
 import ConnectWallet from "@/components/ConnectWallet";
 import StaggeredMenu from "@/components/StaggeredMenu";
 import ENSAddressInput from "@/components/ENSAddressInput";
-import { isENSName, resolveToAddress } from "@/lib/ens";
+import { isENSName, isValidAddress, resolveToAddress } from "@/lib/ens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
