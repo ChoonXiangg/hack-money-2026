@@ -1013,6 +1013,14 @@ export class YellowService extends EventEmitter {
     }
 
     /**
+     * Get current app session allocations
+     * Returns the current fund distribution between user and relayer
+     */
+    getAppSessionAllocations(): Array<{ participant: string; asset: string; amount: string }> {
+        return [...this.appSessionAllocations];
+    }
+
+    /**
      * Get auth state
      */
     getAuthState(): AuthState {

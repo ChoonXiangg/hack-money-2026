@@ -180,13 +180,22 @@ app.get('/session/balance', (req: Request, res: Response) => {
         }
 
         const state = session.service.getSessionState();
-        const allocations = session.service.getAppSessionAllocations();
 
-        // Find user's allocation amount
-        const userAllocation = allocations.find(
-            (a: { participant: string; asset: string; amount: string }) => a.participant.toLowerCase() === address.toLowerCase()
-        );
-        const userAllocationAmount = userAllocation?.amount || '0';
+        // Safely get allocations - check if method exists for backwards compatibility
+        let allocations: Array<{ participant: string; asset: string; amount: string }> = [];
+        let userAllocationAmount = '0';
+
+        // Cast to any to check for method existence (handles TypeScript not knowing about the method yet)
+        const serviceAny = session.service as any;
+        if (typeof serviceAny.getAppSessionAllocations === 'function') {
+            allocations = serviceAny.getAppSessionAllocations();
+
+            // Find user's allocation amount
+            const userAllocation = allocations.find(
+                (a: { participant: string; asset: string; amount: string }) => a.participant.toLowerCase() === address.toLowerCase()
+            );
+            userAllocationAmount = userAllocation?.amount || '0';
+        }
 
         res.json({
             hasActiveSession: state.status === 'active',
