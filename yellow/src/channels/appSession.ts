@@ -365,8 +365,14 @@ export async function closeAppSession(
         }
     );
 
+    // Check WebSocket is still connected before sending
+    if (ws.readyState !== WebSocket.OPEN) {
+        throw new Error(`WebSocket not open (state: ${ws.readyState}). Connection may have dropped during session.`);
+    }
+
     ws.send(closeMsg);
     console.log('  Close App Session request sent');
+    console.log(`  WebSocket readyState: ${ws.readyState} (1=OPEN)`);
 
     return waitForAppSessionClose(ws, appSessionId);
 }
@@ -380,11 +386,33 @@ function waitForAppSessionClose(
     timeoutMs: number = TIMING.wsMessageTimeout
 ): Promise<CloseAppSessionResponse> {
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
+        const cleanup = () => {
             ws.off('message', handler);
+            ws.off('close', closeHandler);
+            ws.off('error', errorHandler);
+        };
+
+        const timeout = setTimeout(() => {
+            cleanup();
             console.log('  ✗ Close App Session timeout - no matching response received');
+            console.log(`  WebSocket readyState at timeout: ${ws.readyState} (1=OPEN)`);
             reject(new Error('Close App Session timeout'));
         }, timeoutMs);
+
+        const closeHandler = (code: number, reason: Buffer) => {
+            clearTimeout(timeout);
+            cleanup();
+            reject(new Error(`WebSocket closed during close_app_session (code: ${code}, reason: ${reason?.toString() || 'none'})`));
+        };
+
+        const errorHandler = (err: Error) => {
+            clearTimeout(timeout);
+            cleanup();
+            reject(new Error(`WebSocket error during close_app_session: ${err.message}`));
+        };
+
+        ws.on('close', closeHandler);
+        ws.on('error', errorHandler);
 
         const handler = (data: WebSocket.Data) => {
             try {
@@ -398,7 +426,7 @@ function waitForAppSessionClose(
                     const errorPayload = msg.res[2];
                     const errorMsg = errorPayload?.error || JSON.stringify(errorPayload);
                     clearTimeout(timeout);
-                    ws.off('message', handler);
+                    cleanup();
                     console.log('  ✗ Close App Session error:', errorMsg);
                     reject(new Error(errorMsg));
                     return;
@@ -409,7 +437,7 @@ function waitForAppSessionClose(
                     const payload = msg.res[2] as CloseAppSessionResponse;
                     if (payload.app_session_id === appSessionId) {
                         clearTimeout(timeout);
-                        ws.off('message', handler);
+                        cleanup();
                         console.log('  ✓ App Session closed');
                         resolve(payload);
                     }
@@ -421,7 +449,7 @@ function waitForAppSessionClose(
                     const sessionId = payload.app_session_id || (payload as any).session_id;
                     if (sessionId === appSessionId) {
                         clearTimeout(timeout);
-                        ws.off('message', handler);
+                        cleanup();
                         console.log('  ✓ App Session closed (alternate response)');
                         resolve(payload);
                     }
@@ -429,7 +457,7 @@ function waitForAppSessionClose(
 
                 if (msg.error) {
                     clearTimeout(timeout);
-                    ws.off('message', handler);
+                    cleanup();
                     reject(new Error(msg.error.message || 'Close App Session error'));
                 }
             } catch (err) {
