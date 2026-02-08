@@ -335,11 +335,10 @@ export default function StreamCredits() {
                     {/* Action Buttons */}
                     <div className="flex gap-2 mb-3">
                         <HoverBorderGradient
-                            containerClassName="rounded-full flex-1"
+                            containerClassName={`rounded-full flex-1 ${isDepositing || !depositAmount ? 'pointer-events-none opacity-70' : ''}`}
                             as="button"
                             className="bg-black text-white flex items-center justify-center w-full text-xs font-semibold px-4 py-2"
                             onClick={handleDeposit}
-                            disabled={isDepositing || !depositAmount}
                         >
                             {isDepositing ? (
                                 <>
@@ -351,11 +350,10 @@ export default function StreamCredits() {
                             )}
                         </HoverBorderGradient>
                         <HoverBorderGradient
-                            containerClassName="rounded-full flex-1"
+                            containerClassName={`rounded-full flex-1 ${isWithdrawing ? 'pointer-events-none opacity-70' : ''}`}
                             as="button"
                             className="bg-black text-white flex items-center justify-center w-full text-xs font-semibold px-4 py-2"
                             onClick={handleWithdraw}
-                            disabled={isWithdrawing}
                         >
                             {isWithdrawing ? (
                                 <>
