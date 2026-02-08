@@ -35,7 +35,7 @@ LeStream is a decentralized music streaming platform that enables **real-time, p
 
 The following diagram illustrates the complete flow from listener to artist payment:
 
-![LeStream Architecture](images/hackmoney.drawio.png)
+![LeStream Architecture](images/hackmoney.jpg)
 
 **Flow Summary:**
 1. **Artist Registration**: Artist registers ENS name with payout chain preference stored in text records
