@@ -101,21 +101,21 @@ The system is composed of two primary micro-services working in unison.
 ```mermaid
 graph TD
     subgraph "User Client (Next.js)"
-        UI[Frontend UI]
-        Wallet[MetaMask]
-        MusicPlayer[Audio Player Component]
+        UI["Frontend UI"]
+        Wallet["MetaMask"]
+        MusicPlayer["Audio Player Component"]
     end
 
     subgraph "Off-Chain Settlement Layer (Yellow)"
-        SessionMgr[Session Server (Express)]
-        YellowNode[Yellow Network Node]
-        StateChannel[State Channel]
+        SessionMgr["Session Server (Express)"]
+        YellowNode["Yellow Network Node"]
+        StateChannel["State Channel"]
     end
 
     subgraph "Liquidity Layer (Circle Arc)"
-        ArcAPI[Arc API Wrapper]
-        USDC[USDC Payment Rails]
-        Splitter[Smart Splitter Logic]
+        ArcAPI["Arc API Wrapper"]
+        USDC["USDC Payment Rails"]
+        Splitter["Smart Splitter Logic"]
     end
 
     %% Flows
