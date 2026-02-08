@@ -163,18 +163,14 @@ export default function ConnectWallet() {
     <Dropdown>
       <DropdownTrigger>
         <button
-          className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl font-[family-name:var(--font-climate)]"
+          className="bg-black px-5 py-3 text-sm font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl font-[family-name:var(--font-climate)] min-w-[240px] text-left"
           style={{ borderRadius: "12px" }}
         >
           <span className="flex items-center gap-2">
             {truncated}
-            {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : balance ? (
-              <span className="font-[family-name:var(--font-murecho)] text-xs font-normal text-white/70">
-                {parseFloat(balance).toFixed(2)} USDC
-              </span>
-            ) : null}
+            <span className="font-[family-name:var(--font-murecho)] text-xs font-normal text-white/70">
+              {balance ? `${parseFloat(balance).toFixed(2)} USDC` : ''}
+            </span>
           </span>
         </button>
       </DropdownTrigger>

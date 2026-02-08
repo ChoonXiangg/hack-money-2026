@@ -205,7 +205,7 @@ export default function StreamCredits() {
 
     return (
         <div
-            className="bg-black text-sm font-semibold text-white shadow-lg font-[family-name:var(--font-climate)]"
+            className="bg-black text-sm font-semibold text-white shadow-lg font-[family-name:var(--font-climate)] min-w-[240px]"
             style={{ borderRadius: "12px" }}
         >
             {/* Header - Always visible */}
@@ -216,13 +216,9 @@ export default function StreamCredits() {
             >
                 <span className="flex items-center gap-2">
                     Stream Credits
-                    {isLoading ? (
-                        <Loader2 className="h-3 w-3 animate-spin text-white/70" />
-                    ) : credits !== null ? (
-                        <span className={`font-[family-name:var(--font-murecho)] text-xs font-normal ${error ? 'text-red-400' : 'text-white/70'}`}>
-                            {credits} USDC
-                        </span>
-                    ) : null}
+                    <span className={`font-[family-name:var(--font-murecho)] text-xs font-normal ${error ? 'text-red-400' : 'text-white/70'}`}>
+                        {credits !== null ? `${credits} USDC` : ''}
+                    </span>
                 </span>
                 {isExpanded ? (
                     <ChevronUp className="h-4 w-4 text-white/70" />

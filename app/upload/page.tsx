@@ -257,8 +257,6 @@ export default function UploadPage() {
         position="right"
         items={[
           { label: "Upload Song", ariaLabel: "Upload a new song", link: "/upload" },
-          { label: "My Badges", ariaLabel: "View your badges", link: "/badges" },
-          { label: "My Top Listeners", ariaLabel: "View your top listeners", link: "/top-listeners" },
         ]}
         displaySocials={false}
         displayItemNumbering={false}
