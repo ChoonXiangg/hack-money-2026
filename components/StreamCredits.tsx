@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { HoverBorderGradient } from "./ui/hover-border-gradient";
+import TextField from '@mui/material/TextField';
 
 const SUPPORTED_CHAINS = [
     { id: "Arc_Testnet", name: "Arc" },
@@ -204,15 +206,13 @@ export default function StreamCredits() {
     };
 
     return (
-        <div
-            className="bg-black text-sm font-semibold text-white shadow-lg font-[family-name:var(--font-climate)] min-w-[240px]"
-            style={{ borderRadius: "12px" }}
-        >
-            {/* Header - Always visible */}
-            <button
+        <div className="min-w-[240px]">
+            {/* Header Button - Always visible */}
+            <HoverBorderGradient
+                containerClassName="rounded-full w-full"
+                as="button"
+                className="bg-black text-white flex items-center justify-between w-full font-[family-name:var(--font-climate)] text-sm px-5 py-3"
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-                style={{ borderRadius: isExpanded ? "12px 12px 0 0" : "12px" }}
             >
                 <span className="flex items-center gap-2">
                     Stream Credits
@@ -225,12 +225,11 @@ export default function StreamCredits() {
                 ) : (
                     <ChevronDown className="h-4 w-4 text-white/70" />
                 )}
-            </button>
+            </HoverBorderGradient>
 
             {/* Dropdown Content */}
             {isExpanded && (
-                <div className="px-5 pb-4 border-t border-white/10 mt-2">
-                    {/* Multi-Chain Balances */}
+                <div className="mt-2 bg-black rounded-xl px-5 pb-4 pt-4 border border-white/10">
                     {/* Chain Selector */}
                     <div className="mb-3">
                         <label className="block text-xs text-white/60 mb-2 font-[family-name:var(--font-murecho)]">
@@ -251,71 +250,129 @@ export default function StreamCredits() {
 
                     {/* Amount Input */}
                     <div className="mb-3">
-                        <label className="block text-xs text-white/60 mb-2 font-[family-name:var(--font-murecho)]">
-                            Amount (USDC)
-                        </label>
-                        <input
+                        <TextField
+                            id="amount-input"
+                            label="Amount (USDC)"
+                            variant="standard"
                             type="number"
-                            step="0.0001"
-                            min="0"
                             placeholder="0.0100"
                             value={depositAmount}
                             onChange={(e) => setDepositAmount(e.target.value)}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm font-[family-name:var(--font-murecho)] focus:outline-none focus:border-white/40 transition-colors"
+                            fullWidth
+                            slotProps={{
+                                input: {
+                                    inputProps: {
+                                        step: "0.0001",
+                                        min: "0"
+                                    }
+                                }
+                            }}
+                            sx={{
+                                '& .MuiInputLabel-root': {
+                                    color: 'rgba(255, 255, 255, 0.6)',
+                                    fontFamily: 'var(--font-murecho)',
+                                    fontSize: '0.75rem',
+                                },
+                                '& .MuiInputLabel-root.Mui-focused': {
+                                    color: 'rgba(255, 255, 255, 0.8)',
+                                },
+                                '& .MuiInput-root': {
+                                    color: 'white',
+                                    fontFamily: 'var(--font-murecho)',
+                                    fontSize: '0.875rem',
+                                },
+                                '& .MuiInput-root:before': {
+                                    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+                                },
+                                '& .MuiInput-root:hover:not(.Mui-disabled):before': {
+                                    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+                                },
+                                '& .MuiInput-root:after': {
+                                    borderBottomColor: '#B19EEF',
+                                },
+                            }}
                         />
                     </div>
 
                     {/* Private Key Input */}
                     <div className="mb-3">
-                        <label className="block text-xs text-white/60 mb-2 font-[family-name:var(--font-murecho)]">
-                            Private Key (0x...)
-                        </label>
-                        <input
+                        <TextField
+                            id="private-key-input"
+                            label="Private Key (0x...)"
+                            variant="standard"
                             type="password"
                             placeholder="0x..."
                             value={privateKey}
                             onChange={(e) => setPrivateKey(e.target.value)}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-white/40 transition-colors"
+                            fullWidth
+                            sx={{
+                                '& .MuiInputLabel-root': {
+                                    color: 'rgba(255, 255, 255, 0.6)',
+                                    fontFamily: 'var(--font-murecho)',
+                                    fontSize: '0.75rem',
+                                },
+                                '& .MuiInputLabel-root.Mui-focused': {
+                                    color: 'rgba(255, 255, 255, 0.8)',
+                                },
+                                '& .MuiInput-root': {
+                                    color: 'white',
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.875rem',
+                                },
+                                '& .MuiInput-root:before': {
+                                    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+                                },
+                                '& .MuiInput-root:hover:not(.Mui-disabled):before': {
+                                    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+                                },
+                                '& .MuiInput-root:after': {
+                                    borderBottomColor: '#B19EEF',
+                                },
+                            }}
                         />
                     </div>
 
                     {/* Action Buttons */}
                     <div className="flex gap-2 mb-3">
-                        <button
+                        <HoverBorderGradient
+                            containerClassName="rounded-full flex-1"
+                            as="button"
+                            className="bg-black text-white flex items-center justify-center w-full text-xs font-semibold px-4 py-2"
                             onClick={handleDeposit}
                             disabled={isDepositing || !depositAmount}
-                            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-900 disabled:cursor-not-allowed rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2"
                         >
                             {isDepositing ? (
                                 <>
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                     Depositing...
                                 </>
                             ) : (
                                 'Deposit'
                             )}
-                        </button>
-                        <button
+                        </HoverBorderGradient>
+                        <HoverBorderGradient
+                            containerClassName="rounded-full flex-1"
+                            as="button"
+                            className="bg-black text-white flex items-center justify-center w-full text-xs font-semibold px-4 py-2"
                             onClick={handleWithdraw}
                             disabled={isWithdrawing}
-                            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:cursor-not-allowed rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2"
                         >
                             {isWithdrawing ? (
                                 <>
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                     Withdrawing...
                                 </>
                             ) : (
                                 'Withdraw'
                             )}
-                        </button>
+                        </HoverBorderGradient>
                     </div>
 
                     {/* Action Message */}
                     {actionMessage && (
                         <div className={`text-xs font-[family-name:var(--font-murecho)] p-2 rounded ${actionMessage.type === 'success'
-                                ? 'bg-green-900/30 text-green-300'
-                                : 'bg-red-900/30 text-red-300'
+                            ? 'bg-green-900/30 text-green-300'
+                            : 'bg-red-900/30 text-red-300'
                             }`}>
                             {actionMessage.text}
                         </div>
